@@ -1,0 +1,18 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# ignore folders
+*delete/
+*cache/
+20*/
+data*/
+literature*/
+report*/
+
+# ignore more files
+.DS_Store
+*.html
+*.pdf
+notes*
