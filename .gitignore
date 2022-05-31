@@ -7,7 +7,7 @@
 *delete/
 *cache/
 20*/
-data*/
+data_rca/
 literature*/
 report*/
 
@@ -15,4 +15,5 @@ report*/
 .DS_Store
 *.html
 *.pdf
+*.pptx
 notes*
