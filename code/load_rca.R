@@ -30,14 +30,23 @@ plot(x = lons, y = lats)
 plot(STATIONS, axes = TRUE, pch = 1) #, bg = "white", axes = FALSE, cex = 3, pch = 21, col = "black"
 plot(shoreline, add = TRUE, border = "blue", lwd = 2)
 
-
+# On Jeremy's cluster ----
 cd /local/users/jtesta/RCA_output_benthos/
 R
 
 library(R.matlab)
+data <- readMat("RCAoutput.mat") #~2 minutes
+ls(data)
+# [1] "RCAoutput"         "RCAoutput.2ndhalf"
+ls(data$RCAoutput)
+tmp <- attr(data[[1]], "dimnames")[[1]] #DO
+D <- lapply(data[[1]], unlist, use.names = FALSE)
+D <- as.data.frame(D, col.names = tmp)
+dim(D)
+# [1] 242735631         1
+data[[1]][1,1,1]$DO[1,1,1][[1]][,,]$do
 
-data <- readMat("RCAoutput.mat")
-
+# End on Jeremy's cluster ----
 
 cd /local/users/cshen/rca_30year/1987_out1
 
