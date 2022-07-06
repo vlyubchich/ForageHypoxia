@@ -32,9 +32,12 @@ rcadata <- function(X, sel, dt, idt) {
 
 # Settings ----
 # Set what data will extract
-YEARS <- 1987:2015 # 30 years 1986:2015
+YEARS <- 2012:2015 # 30 years 1986:2015
 LAYERS <- 20 # layers to extract
-files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc" # no time dimensionality
+files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc", # no time dimensionality
+                   "./2006_out1//Y2006_eutr_0840.nc",
+                   "./2008_out1//Y2008_eutr_0913.nc",
+                   "./2012_out1//Y2012_eutr_1059.nc"
 )
 
 for (year in YEARS) { # year = 1989
