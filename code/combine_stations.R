@@ -25,4 +25,4 @@ for (i in 1:nrow(Dben)) {
     Dben$Replacement[i] <- Dcells$CellID[di]
 }
 'Data compilation complete!'
-write.csv(Dben, './Cell_Proximity.csv', row.names = FALSE)
+write.csv(Dben, './data_benthos/Cell_Proximity.csv', row.names = FALSE)
