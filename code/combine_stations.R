@@ -17,8 +17,7 @@ Dcells2 <- read.csv("./data_rca/rca_cells_2022-06-29.csv") %>%
 
 # find geodesic distances from each cell to station
 # and select the closest non-missing as a Replacement
-for (i in 1:nrow(Dben)) { # i = 1
-    # distance from this airport to existing (km)
+for (i in 1:nrow(Dben)) {
     d <- geosphere::distm(Dben[i, c("LONGITUDE", "LATITUDE")],
                           Dcells[, c("LON", "LAT")])
     di <- which.min(d)
