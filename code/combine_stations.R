@@ -22,7 +22,8 @@ for (i in 1:nrow(Dben)) {
                           Dcells[, c("LON", "LAT")])
     di <- which.min(d)
     Dben$DistanceToNearestKm[i] <- d[di]
-    Dben$Replacement[i] <- Dcells$CellID[di]
+    Dben$CellID[i] <- Dcells$CellID[di]
 }
 'Data compilation complete!'
 write.csv(Dben, './data_benthos/Cell_Proximity.csv', row.names = FALSE)
+
