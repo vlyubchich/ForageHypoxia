@@ -40,9 +40,10 @@ annual_data = spread('Year').final_spread()
 
 '''
 Counts number of any given variable in a year, in this instance, number of stations per year
-var1 = 
-var2 = 
-y = 
+var1 = The variable we are filtering by (in this case, by year)
+var2 = The variable we are counting
+y = The value of var1 (example: 2009)
+Basically: We are counting the value of var2, during the year (var1) of y.
 '''
 def variable_count(var1, var2, y):
     simp_df = df[df[var1] == y] #simp_df stands for simplified dataframe
