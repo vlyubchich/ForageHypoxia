@@ -2,6 +2,9 @@
 Dcells <- read.csv("./data_rca/rca_cells_2022-06-29.csv")
 Dben <- read.csv("./data_benthos/benthos_biomass.csv")
 
+sapply(unique(Dben$Year), function(y) length(unique(Dben$STATION[Dben$Year == y])))
+
+
 # base R operations
 Dben$CellID <- NA #create a new empty variable
 Dcells = Dcells[Dcells$FSM == 1,] #select only water cells
