@@ -15,9 +15,27 @@ This GitHub repository is for collaborating on the analysis of Chesapeake Bay da
     
 Note that file paths are relative to the project location on your computer, which is the default R working directory for this project. Hence, there should be no need to set a working directory. For example, to load data, use 
 ```{r}
-D = read.csv("./data_folder/FileName.csv")
+D <- read.csv("./data_folder/FileName.csv")
 ```
 to save processed data for future use
 ```{r}
-write.csv(RObjectToSave, "./data_folder/FileName.csv", row.names = FALSE)
+write.csv(RObjectToSave, 
+          "./data_folder/FileName.csv", 
+          row.names = FALSE)
 ```
+
+## Data
+
+The main data files are described below.
+
++ `data_rca/` is a folder with RCA model outputs. Due to their large size, the folder is ignored on Git. Please put the corresponding files to this folder on your computer manually.
+
+
+## Code
+
+The main files with code are described below, presumably in the order they enter the project workflow.
+
++ `code/rca_extract.R` file to process RCA outputs and extract: 
+    * `data_rca/rca_cells_[YYYY-MM-DD].csv` information on all model cells, where FSM is the land mask variable (`1`=water, `0`=land, `-1`=river BC, `-2`=ocean BC);
+    * `data_rca/rca_ts_YYYY_[YYYY-MM-DD].csv` time series for water cells, separated by year, where `[YYYY-MM-DD]` is the system date when the file was extracted.
+

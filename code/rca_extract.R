@@ -14,7 +14,8 @@ mysum <- function(x) {
 rcadata <- function(X, sel, dt, idt) {
     # X = WTEMP; sel = selection; idt = idates
     # X = input array
-    # sel = selections
+    # sel = spatial selections
+    # dt = vector of dates
     # idt = indices for date subset
     vname <- deparse(substitute(X))
     if (dim(sel)[2] == 2) { # if select only one layer at a time
@@ -32,7 +33,7 @@ rcadata <- function(X, sel, dt, idt) {
 
 # Settings ----
 # Set what data will extract
-YEARS <- 2012:2015 # 30 years 1986:2015
+YEARS <- 1986:2015 # 30 years 1986:2015
 LAYERS <- 20 # layers to extract
 files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc", # no time dimensionality
                    "./2006_out1//Y2006_eutr_0840.nc",
@@ -71,16 +72,22 @@ for (year in YEARS) { # year = 1989
                                 FSM = as.vector(FSM))
             write.csv(CELLS, row.names = FALSE,
                       file = paste0("/local/users/lyubchich/rca_cells_", Sys.Date(), ".csv"))
-            # selection of cells
+            # spatial selection of cells
             selection <- which(FSM == 1, arr.ind = TRUE)
             # dim(selection) #  3386    2 # checked for 1986 and 1989
         }
 
         # Dates from the current file
         # To get a calendar date, add the TIME variable to 12 AM January 1 1983.
-        Dates <- ncvar_get(nf, varid = "TIME") + as.Date("1983-01-01") + 0.84
+        # Use 1/6 to make sure each loaded file has the whole day of 6 records
+        # (avoid sticking large tensors together).
+        Dates <- ncvar_get(nf, varid = "TIME") + as.Date("1983-01-01") - 1/6
+        # summary(Dates)
         # dates index to use
-        idates <- !(Dates < as.Date(paste0(year, "-01-01")))
+        idates <- !(Dates < as.Date(paste0(year, "-01-01")) |
+                        Dates >= as.Date(paste0(year + 1, "-01-01")))
+        # Check that each date has 6 records
+        # table(Dates[idates])
         Dates <- names(table(Dates[idates]))
 
         # Extract the actual variables
@@ -101,5 +108,5 @@ for (year in YEARS) { # year = 1989
         nc_close(nf)
     }
     write.csv(D, row.names = FALSE,
-          file = paste0("/local/users/lyubchich/rca_data_", year, "_", Sys.Date(), ".csv"))
+          file = paste0("/local/users/lyubchich/rca_ts_", year, "_", Sys.Date(), ".csv"))
 }
