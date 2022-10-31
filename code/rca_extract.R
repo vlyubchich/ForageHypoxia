@@ -10,7 +10,7 @@ library(data.table)
 library(zoo)
 
 mysum <- function(x) {
-    c(mean(x), min(x), max(x), sd(x))
+    c(mean(x), sd(x)) # min(x), max(x),
 }
 rcadata <- function(X, sel, dt, idt) {
     # X = WTEMP; sel = selection; idt = idates
@@ -27,7 +27,7 @@ rcadata <- function(X, sel, dt, idt) {
                        Date = dt)
         })
         D <- data.table::rbindlist(D) # do.call(rbind, D)
-        names(D)[1:4] <- paste(vname, c("avg", "min", "max", "sd"), sep = "_")
+        names(D)[1:2] <- paste(vname, c("avg", "sd"), sep = "_") # "min", "max",
     }
     return(D)
 }
@@ -44,16 +44,12 @@ files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc", # no time dimensionality
 )
 
 
-for (year in YEARS) { # year = 1989
-
-    # Create empty datasets to combine with data from each file, per year
-    Dates <- numeric()
-    WTEMP <- SAL <- TPOC <- CHLAVEG <- DOAVEG <- array(dim = c(84, 124, length(LAYERS), 1))
-
+for (year in YEARS) { # year = 2004
     # List files YXXXX_eutr_XXXX.nc, where X are the numbers
     files_year <- list.files(paste0("./", year, "_out1/"), full.names = TRUE)
     files_year <- sort(files_year[grepl("eutr\\_\\d+", files_year)])
     files_year <- setdiff(files_year, files_exclude)
+
     for (ify in 1:length(files_year)) { # fy = "./1986_out1//Y1986_eutr_0110.nc" # fy = files_year[1]
         fy <- files_year[ify]
         print(fy)
@@ -83,20 +79,29 @@ for (year in YEARS) { # year = 1989
             # dim(selection) #  3386    2 # checked for 1986 and 1989
         }
 
-        # Extract dates
-        Dates <- abind(Dates, ncvar_get(nf, varid = "TIME"))
-
-        # Extract the actual variables
-        # water temperature (degrees C)
-        WTEMP <- abind(WTEMP, ncvar_get(nf, varid = "HYDTEMP")[,, LAYERS,, drop = FALSE], along = 4)
-        # salinity
-        SAL <- abind(SAL, ncvar_get(nf, varid = "SAL")[,, LAYERS,, drop = FALSE], along = 4)
-        # particulate organic carbon (mg/L)
-        TPOC <- abind(TPOC, ncvar_get(nf, varid = "TPOC")[,, LAYERS,, drop = FALSE], along = 4)
-        # chlorophyll-a (ug/L)
-        CHLAVEG <- abind(CHLAVEG, ncvar_get(nf, varid = "CHLAVEG")[,, LAYERS,, drop = FALSE], along = 4)
-        # dissolved oxygen (mg/L)
-        DOAVEG <- abind(DOAVEG, ncvar_get(nf, varid = "DOAVEG")[,, LAYERS,, drop = FALSE], along = 4)
+        if (ify == 1) {
+            # Create "starting" datasets to combine with data from each file, per year
+            Dates <- ncvar_get(nf, varid = "TIME")
+            WTEMP <- ncvar_get(nf, varid = "HYDTEMP")[,, LAYERS,, drop = FALSE]
+            SAL <- ncvar_get(nf, varid = "SAL")[,, LAYERS,, drop = FALSE]
+            TPOC <- ncvar_get(nf, varid = "TPOC")[,, LAYERS,, drop = FALSE]
+            CHLAVEG <- ncvar_get(nf, varid = "CHLAVEG")[,, LAYERS,, drop = FALSE]
+            DOAVEG <- ncvar_get(nf, varid = "DOAVEG")[,, LAYERS,, drop = FALSE]
+        } else {
+            # Extract dates
+            Dates <- abind(Dates, ncvar_get(nf, varid = "TIME"))
+            # Extract water quality variables
+            # water temperature (degrees C)
+            WTEMP <- abind(WTEMP, ncvar_get(nf, varid = "HYDTEMP")[,, LAYERS,, drop = FALSE], along = 4)
+            # salinity
+            SAL <- abind(SAL, ncvar_get(nf, varid = "SAL")[,, LAYERS,, drop = FALSE], along = 4)
+            # particulate organic carbon (mg/L)
+            TPOC <- abind(TPOC, ncvar_get(nf, varid = "TPOC")[,, LAYERS,, drop = FALSE], along = 4)
+            # chlorophyll-a (ug/L)
+            CHLAVEG <- abind(CHLAVEG, ncvar_get(nf, varid = "CHLAVEG")[,, LAYERS,, drop = FALSE], along = 4)
+            # dissolved oxygen (mg/L)
+            DOAVEG <- abind(DOAVEG, ncvar_get(nf, varid = "DOAVEG")[,, LAYERS,, drop = FALSE], along = 4)
+        }
         nc_close(nf)
     }
 
@@ -112,10 +117,10 @@ for (year in YEARS) { # year = 1989
 
     # Process and combine data -- all columns for one variable,
     # remove index columns for other variables
-    D <- cbind(rcadata(X = WTEMP, sel = selection, dt = Dates, idt = idates)[,1:4],
-               rcadata(X = SAL, sel = selection, dt = Dates, idt = idates)[,1:4],
-               rcadata(X = TPOC, sel = selection, dt = Dates, idt = idates)[,1:4],
-               rcadata(X = CHLAVEG, sel = selection, dt = Dates, idt = idates)[,1:4],
+    D <- cbind(rcadata(X = WTEMP, sel = selection, dt = Dates, idt = idates)[,1:2],
+               rcadata(X = SAL, sel = selection, dt = Dates, idt = idates)[,1:2],
+               rcadata(X = TPOC, sel = selection, dt = Dates, idt = idates)[,1:2],
+               rcadata(X = CHLAVEG, sel = selection, dt = Dates, idt = idates)[,1:2],
                rcadata(X = DOAVEG, sel = selection, dt = Dates, idt = idates))
 
     write.csv(D, row.names = FALSE,
