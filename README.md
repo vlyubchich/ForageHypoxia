@@ -36,6 +36,6 @@ The main data files are described below.
 The main files with code are described below, presumably in the order they enter the project workflow.
 
 + `code/rca_extract.R` file to process RCA outputs and extract: 
-    * `data_rca/rca_cells_[YYYY-MM-DD].csv` information on all model cells, where FSM is the land mask variable (`1`=water, `0`=land, `-1`=river BC, `-2`=ocean BC);
-    * `data_rca/rca_ts_YYYY_[YYYY-MM-DD].csv` time series for water cells, separated by year, where `[YYYY-MM-DD]` is the system date when the file was extracted.
+    * `data_rca/rca_cells_[version].csv` information on all model cells, where FSM is the land mask variable (`1`=water, `0`=land, `-1`=river BC, `-2`=ocean BC);
+    * `data_rca/rca_ts_YYYY_[version].csv` time series for water cells, separated by year, where `[version]` is the version of the extraction code.
 

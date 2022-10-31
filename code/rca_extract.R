@@ -4,6 +4,7 @@ R
 
 # Packages and functions ----
 rm(list = ls())
+library(abind)
 library(ncdf4)
 library(data.table)
 library(zoo)
@@ -20,7 +21,7 @@ rcadata <- function(X, sel, dt, idt) {
     vname <- deparse(substitute(X))
     if (dim(sel)[2] == 2) { # if select only one layer at a time
         D <- apply(sel, 1, function(i) { # i = sel[1000,]
-            data.table(zoo::rollapply(X[i[1], i[2], LAYERS, idt],
+            data.table(zoo::rollapply(X[i[1], i[2], 1, idt],
                                       width = 6, mysum, by = 6),
                        CellID = CID[i[1], i[2]],
                        Date = dt)
@@ -32,6 +33,7 @@ rcadata <- function(X, sel, dt, idt) {
 }
 
 # Settings ----
+ver <- 2 # version of the calculations
 # Set what data will extract
 YEARS <- 1986:2015 # 30 years 1986:2015
 LAYERS <- 20 # layers to extract
@@ -41,8 +43,12 @@ files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc", # no time dimensionality
                    "./2012_out1//Y2012_eutr_1059.nc"
 )
 
+
 for (year in YEARS) { # year = 1989
-    D <- data.table()
+
+    # Create empty datasets to combine with data from each file, per year
+    Dates <- numeric()
+    WTEMP <- SAL <- TPOC <- CHLAVEG <- DOAVEG <- array(dim = c(84, 124, length(LAYERS), 1))
 
     # List files YXXXX_eutr_XXXX.nc, where X are the numbers
     files_year <- list.files(paste0("./", year, "_out1/"), full.names = TRUE)
@@ -71,42 +77,47 @@ for (year in YEARS) { # year = 1989
                                 LON = as.vector(LON),
                                 FSM = as.vector(FSM))
             write.csv(CELLS, row.names = FALSE,
-                      file = paste0("/local/users/lyubchich/rca_cells_", Sys.Date(), ".csv"))
+                      file = paste0("/local/users/lyubchich/rca_cells_", ver, ".csv"))
             # spatial selection of cells
             selection <- which(FSM == 1, arr.ind = TRUE)
             # dim(selection) #  3386    2 # checked for 1986 and 1989
         }
 
-        # Dates from the current file
-        # To get a calendar date, add the TIME variable to 12 AM January 1 1983.
-        # Use 1/6 to make sure each loaded file has the whole day of 6 records
-        # (avoid sticking large tensors together).
-        Dates <- ncvar_get(nf, varid = "TIME") + as.Date("1983-01-01") - 1/6
-        # summary(Dates)
-        # dates index to use
-        idates <- !(Dates < as.Date(paste0(year, "-01-01")) |
-                        Dates >= as.Date(paste0(year + 1, "-01-01")))
-        # Check that each date has 6 records
-        # table(Dates[idates])
-        Dates <- names(table(Dates[idates]))
+        # Extract dates
+        Dates <- abind(Dates, ncvar_get(nf, varid = "TIME"))
 
         # Extract the actual variables
-        WTEMP <- ncvar_get(nf, varid = "HYDTEMP") # water temperature (degrees C)
-        SAL <- ncvar_get(nf, varid = "SAL") # salinity
-        TPOC <- ncvar_get(nf, varid = "TPOC") # particulate organic carbon (mg/L)
-        CHLAVEG <- ncvar_get(nf, varid = "CHLAVEG") # chlorophyll-a (ug/L)
-        DOAVEG <- ncvar_get(nf, varid = "DOAVEG") # dissolved oxygen (mg/L)
-
-        # Process and combine data -- all columns for one variable,
-        # remove index columns for other variables
-        d <- cbind(rcadata(X = WTEMP, sel = selection, dt = Dates, idt = idates)[,1:4],
-                   rcadata(X = SAL, sel = selection, dt = Dates, idt = idates)[,1:4],
-                   rcadata(X = TPOC, sel = selection, dt = Dates, idt = idates)[,1:4],
-                   rcadata(X = CHLAVEG, sel = selection, dt = Dates, idt = idates)[,1:4],
-                   rcadata(X = DOAVEG, sel = selection, dt = Dates, idt = idates))
-        D <- rbind(D, d)
+        # water temperature (degrees C)
+        WTEMP <- abind(WTEMP, ncvar_get(nf, varid = "HYDTEMP")[,, LAYERS,, drop = FALSE], along = 4)
+        # salinity
+        SAL <- abind(SAL, ncvar_get(nf, varid = "SAL")[,, LAYERS,, drop = FALSE], along = 4)
+        # particulate organic carbon (mg/L)
+        TPOC <- abind(TPOC, ncvar_get(nf, varid = "TPOC")[,, LAYERS,, drop = FALSE], along = 4)
+        # chlorophyll-a (ug/L)
+        CHLAVEG <- abind(CHLAVEG, ncvar_get(nf, varid = "CHLAVEG")[,, LAYERS,, drop = FALSE], along = 4)
+        # dissolved oxygen (mg/L)
+        DOAVEG <- abind(DOAVEG, ncvar_get(nf, varid = "DOAVEG")[,, LAYERS,, drop = FALSE], along = 4)
         nc_close(nf)
     }
+
+    # To get calendar dates, add the TIME variable to 12 AM January 1 1983.
+    Dates <- Dates + as.Date("1983-01-01")
+    # summary(Dates)
+    # dates index to use
+    idates <- !(Dates < as.Date(paste0(year, "-01-01")) |
+                    Dates >= as.Date(paste0(year + 1, "-01-01")))
+    # Check that each date has 6 records
+    # table(Dates[idates])
+    Dates <- names(table(Dates[idates]))
+
+    # Process and combine data -- all columns for one variable,
+    # remove index columns for other variables
+    D <- cbind(rcadata(X = WTEMP, sel = selection, dt = Dates, idt = idates)[,1:4],
+               rcadata(X = SAL, sel = selection, dt = Dates, idt = idates)[,1:4],
+               rcadata(X = TPOC, sel = selection, dt = Dates, idt = idates)[,1:4],
+               rcadata(X = CHLAVEG, sel = selection, dt = Dates, idt = idates)[,1:4],
+               rcadata(X = DOAVEG, sel = selection, dt = Dates, idt = idates))
+
     write.csv(D, row.names = FALSE,
-          file = paste0("/local/users/lyubchich/rca_ts_", year, "_", Sys.Date(), ".csv"))
+              file = paste0("/local/users/lyubchich/rca_ts_", year, "_", ver, ".csv"))
 }
