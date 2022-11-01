@@ -1,3 +1,4 @@
+# This script is to test different options for creating the hypoxia network.
 
 rm(list = ls())
 library(data.table)
@@ -6,6 +7,7 @@ library(ggplot2)
 
 
 # Data ----
+
 rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
     filter(FSM == 1) %>%
     mutate(CellID = paste0("x", CellID))
@@ -136,15 +138,17 @@ for (v in 1:nrow(M_low)) {
     M[j, i] <- M3[2, v]
 }
 
+
 # Plot ----
+library(igraph)
 library(network)
 # library(randomcoloR)
 
 # Significance level alpha
 level_sig = 0.05
 
-# Random subset of nodes
-ss <- sample(1:nrow(M), 50)
+# Random subset of nodes because the plot is too slow
+ss <- sort(sample(1:nrow(M), 500))
 
 N <- network(M[ss, ss] < level_sig,
              matrix.type = "adjacency",
@@ -174,6 +178,40 @@ plot.network(N, new = TRUE, coord = cbind(N%v%'lon', N%v%'lat'),
              # usecurve = 1, edge.curve = 0.2,
              usearrows = TRUE)
 # dev.off()
+
+#https://stackoverflow.com/questions/22453273/how-to-visualize-a-large-network-in-r
+g <- graph_from_adjacency_matrix(M[ss, ss] < level_sig,
+                                 mode = "directed",
+                                 diag = FALSE)
+dev.off()
+?plot.igraph
+coords <- layout_(g, as_star())
+summary(coords)
+# from -1 to 1
+# library(scales)
+coords <- rca_cells[ss, ] %>%
+    mutate(lon = scales::rescale(LON, to = c(-1, 1)),
+           lat = scales::rescale(LAT, to = c(-1, 1)),
+           .keep = "none") %>%
+    as.matrix()
+
+
+plot(simplify(g),
+     vertex.size = 0.01 ,
+     vertex.label.cex = 0.75,
+     vertex.label = NA,
+     vertex.label.color = "black",
+     # vertex.frame.color = adjustcolor("white", alpha.f = 0),
+     vertex.color = adjustcolor("white", alpha.f = 0),
+     edge.arrow.size=0.001,
+     edge.color = rgb(0, 58, 76, alpha = 30, maxColorValue = 100),
+     # display.isolates=TRUE
+     # ,
+     # vertex.label=ifelse(page_rank(g)$vector > 0.1 ,
+     #                     "important nodes", NA)
+     layout = coords
+)
+
 
 # Embedding ----
 library(igraph)
