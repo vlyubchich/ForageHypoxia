@@ -1,3 +1,7 @@
+# Extract data from ROMS-RCA model outputs saved on Jeremy's cluster.
+# Specifically, save a table with cell information (lat, lon, dimensions, depth, type)
+# and daily summaries of water quality variables for water cells
+# (one file of the summaries per year).
 
 cd /local/users/cshen/rca_30year/
 R
@@ -30,6 +34,23 @@ rcadata <- function(X, sel, dt, idt) {
         names(D)[1:2] <- paste(vname, c("avg", "sd"), sep = "_") # "min", "max",
     }
     return(D)
+}
+
+is.leap <- function(year) {
+    if ((year %% 4) == 0) {
+        if ((year %% 100) == 0) {
+            if ((year %% 400) == 0) {
+                res = TRUE
+            } else {
+                res = FALSE
+            }
+        } else {
+            res = TRUE
+        }
+    } else {
+        res = FALSE
+    }
+    return(res)
 }
 
 # Settings ----
@@ -108,6 +129,11 @@ for (year in YEARS) { # year = 2004
     # To get calendar dates, add the TIME variable to 12 AM January 1 1983.
     Dates <- Dates + as.Date("1983-01-01")
     # summary(Dates)
+    # The RCA model has no leap years, remove Feb 29
+    if (is.leap(year)) {
+        f29 <- as.Date(paste0(year, "-02-29"))
+        Dates[Dates >= f29] <- Dates[Dates >= f29] + 1
+    }
     # dates index to use
     idates <- !(Dates < as.Date(paste0(year, "-01-01")) |
                     Dates >= as.Date(paste0(year + 1, "-01-01")))
