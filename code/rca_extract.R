@@ -2,6 +2,7 @@
 # Specifically, save a table with cell information (lat, lon, dimensions, depth, type)
 # and daily summaries of water quality variables for water cells
 # (one file of the summaries per year).
+# These resulting files should be placed in our folder ./data_rca/
 
 cd /local/users/cshen/rca_30year/
 R
