@@ -60,6 +60,9 @@ M <- matrix(data = NA,
             ncol = length(Cells),
             dimnames = list(Cells, Cells))
 M_low <- which(lower.tri(M), arr.ind = TRUE)
+# 2do Create a matrix with selected AR(p) for p.
+# 2do Try larger lags to justify lower limit.
+
 
 ## sequential ----
 system.time(
@@ -81,17 +84,18 @@ library(doParallel)
 # Create cluster
 cl <- parallel::makeCluster(parallel::detectCores())
 # Register it for the foreach loop
-# doParallel::registerDoParallel(cl)
-#Export the dataset (could be done directly in the foreach, but this is more explicit)
-parallel::clusterExport(cl,
-                        varlist = c("Dwide", "M_low", "exo", "Cells"),
-                        envir = environment())
+doParallel::registerDoParallel(cl)
+# Export the dataset (could be done directly in the foreach, but this is more explicit)
+# parallel::clusterExport(cl,
+#                         varlist = c("Dwide", "M_low", "exo", "Cells"),
+#                         envir = environment())
 # parallel::clusterExport(cl, "VARselect")
 
 system.time(
-    M2 <- foreach(v = 1:1000, .combine = rbind, .inorder = FALSE) %dopar% {
-        library(data.table)
-        library(vars)
+    M2 <- foreach(v = 1:1000, .combine = rbind, .inorder = FALSE,
+                  .packages = c("data.table", "vars")) %dopar% {
+        # library(data.table)
+        # library(vars)
         i <- M_low[v, 1]
         j <- M_low[v, 2]
         p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, type = "const", exogen = exo)
@@ -138,6 +142,8 @@ for (v in 1:nrow(M_low)) {
     M[j, i] <- M3[2, v]
 }
 
+# 2do correct for multiple test, by row. (parApply?)
+# p.adjust(, method = "BH") # or Holm
 
 # Plot ----
 library(igraph)
@@ -148,7 +154,7 @@ library(network)
 level_sig = 0.05
 
 # Random subset of nodes because the plot is too slow
-ss <- sort(sample(1:nrow(M), 500))
+ss <- sort(sample(1:nrow(M), 100))
 
 N <- network(M[ss, ss] < level_sig,
              matrix.type = "adjacency",
@@ -184,7 +190,7 @@ g <- graph_from_adjacency_matrix(M[ss, ss] < level_sig,
                                  mode = "directed",
                                  diag = FALSE)
 dev.off()
-?plot.igraph
+# ?plot.igraph
 coords <- layout_(g, as_star())
 summary(coords)
 # from -1 to 1
@@ -195,6 +201,7 @@ coords <- rca_cells[ss, ] %>%
            .keep = "none") %>%
     as.matrix()
 
+# 2do squeeze to different scale for lon, eg -0.3 to 0.3
 
 plot(simplify(g),
      vertex.size = 0.01 ,
@@ -212,6 +219,8 @@ plot(simplify(g),
      layout = coords
 )
 
+# 2do try BioFabric if it is useful. Clusters?
+# 2do M as clusters?
 
 # Embedding ----
 library(igraph)
@@ -221,15 +230,20 @@ G <- graph_from_adjacency_matrix(M < level_sig,
 summary(G)
 
 ## v1 ----
-E1 <- embed_adjacency_matrix(G, no = 9)
+E1 <- igraph::embed_adjacency_matrix(G, no = 9)
 plot(E1$X[, 1], E1$Y[, 1])
 plot(E1$X[, 2], E1$Y[, 2])
 
 ## v2 ----
 # very slow
 library(node2vec)
-E2 <- node2vecR(as_edgelist(G), dim = 9, directed = TRUE)
+E2 <- node2vecR(as_edgelist(G), dim = 9,
+                walk_length = 3,
+                directed = TRUE)
 
+# 2do: differences between embeddings?
+# 2do: Embedding with node information, so the DO info is included.
+# (Create separate embeddings for snapshots when need to predict?)
 
 # unused ----
 output <- foreach(i = 1:(nrow(dat)/30), .combine = rbind, .inorder = FALSE) %:%
