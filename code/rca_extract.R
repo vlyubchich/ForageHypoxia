@@ -66,7 +66,7 @@ files_exclude <- c("./1987_out1//Y1987_eutr_0146.nc", # no time dimensionality
 )
 
 
-for (year in YEARS) { # year = 2004
+for (year in YEARS) { # year = 2000
     # List files YXXXX_eutr_XXXX.nc, where X are the numbers
     files_year <- list.files(paste0("./", year, "_out1/"), full.names = TRUE)
     files_year <- sort(files_year[grepl("eutr\\_\\d+", files_year)])
@@ -129,18 +129,37 @@ for (year in YEARS) { # year = 2004
 
     # To get calendar dates, add the TIME variable to 12 AM January 1 1983.
     Dates <- Dates + as.Date("1983-01-01")
+    check_len_Dates <- length(Dates)
     # summary(Dates)
     # The RCA model has no leap years, remove Feb 29
     if (is.leap(year)) {
         f29 <- as.Date(paste0(year, "-02-29"))
         Dates[Dates >= f29] <- Dates[Dates >= f29] + 1
     }
-    # dates index to use
+    # Dates index to use
     idates <- !(Dates < as.Date(paste0(year, "-01-01")) |
                     Dates >= as.Date(paste0(year + 1, "-01-01")))
     # Check that each date has 6 records
-    # table(Dates[idates])
-    Dates <- names(table(Dates[idates]))
+    date_count <- table(Dates[idates])
+    if (date_count[1] != 6) {
+        date_count <- date_count[-1]
+    }
+    if (date_count[length(date_count)] != 6) {
+        date_count <- date_count[-length(date_count)]
+    }
+    if (!all(date_count == 6)) {
+        stop(paste0("Missing some obs in the middle of year ", year))
+    }
+    # Refresh the dates index
+    idates <- is.element(as.character(Dates), names(date_count))
+    Dates <- names(date_count)
+    if (length(Dates) < 365) {
+        print(paste0(year, " year is not full, some days are missing"))
+    }
+    if (dim(DOAVEG)[4] != check_len_Dates) {
+        stop(paste0("Mismatch of the length of date indices (", check_len_Dates,
+                    ") and dataset dimension (", dim(DOAVEG)[4], ")"))
+    }
 
     # Process and combine data -- all columns for one variable,
     # remove index columns for other variables
