@@ -172,3 +172,8 @@ for (year in YEARS) { # year = 2000
     write.csv(D, row.names = FALSE,
               file = paste0("/local/users/lyubchich/rca_ts_", year, "_", ver, ".csv"))
 }
+
+# [1] "1996 year is not full, some days are missing"
+# [1] "2000 year is not full, some days are missing"
+# [1] "2010 year is not full, some days are missing"
+# [1] "2011 year is not full, some days are missing"
