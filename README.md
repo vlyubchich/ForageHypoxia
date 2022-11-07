@@ -1,7 +1,7 @@
 # ForageHypoxia
 
 ## User memo
-This GitHub repository is for collaborating on the analysis of Chesapeake Bay data, specifically the Maryland SeaGrant project on benthic organisms and hypoxia in the bay. The repository is set as private (not publicly accessible).
+This GitHub repository is for collaborating on the analysis of Chesapeake Bay data, specifically the Maryland Sea Grant project on benthic organisms and hypoxia in the bay. The repository is set as private (not publicly accessible).
 
 1. As a collaborator, you have direct access to the repository **vlyubchich/ForageHypoxia**. Clone it to your computer to your desired location -- this action will create a folder **ForageHypoxia** with all the files inside.
 2. Normal RStudio workflow:
@@ -26,16 +26,22 @@ write.csv(RObjectToSave,
 
 ## Data
 
-The main data files are described below.
-
-+ `data_rca/` is a folder with RCA model outputs. Due to their large size, the folder is ignored on Git. Please put the corresponding files to this folder on your computer manually.
-
++ `data_rca/` is a folder with RCA model outputs. Due to their large size, the folder is ignored on Git. Please create a folder with this name and put the corresponding files to this folder on your computer manually. The latest versions of the files can be downloaded from Google Drive (`_2` in the file names denotes the version of the extraction):
+    * [rca_cells_2.csv](https://drive.google.com/file/d/1fN1U_pKxkkZ9EqHIMVf5zoAuqHF22JNg/view?usp=share_link), 1 MB, contains information on all model cells, where FSM is the land mask variable (`1`=water, `0`=land, `-1`=river BC, `-2`=ocean BC)
+    * [rca_data_1986-2015_2.zip](https://drive.google.com/file/d/1olRbfDZeov8LvCFU4Yd6n7l4SlHSuNso/view?usp=sharing), 3 GB, time series for water cells, in separate files by year
++ `data_benthos/` folder contains benthic data, mostly extracted from raw Excel files using the code `benthos_extract.R`:
+    * `benthos_strata.csv` information about 10 strata of the bay
+    * `benthos_taxa.csv` taxonomic classifications of species from the CBTRUST project, but here use an updated file (??) with benthos-specific classifications by Ryan W.
+    * `benthos_biomass.csv` biomass information, note that we need to use random sites `SITE_TYPE == "RANDOM"`
++ `outputs_Dan_2022-08/` folder with codes and outputs of the summer-2022 volunteer Dan McCrary.
 
 ## Code
 
 The main files with code are described below, presumably in the order they enter the project workflow.
 
-+ `code/rca_extract.R` file to process RCA outputs and extract: 
-    * `data_rca/rca_cells_[version].csv` information on all model cells, where FSM is the land mask variable (`1`=water, `0`=land, `-1`=river BC, `-2`=ocean BC);
-    * `data_rca/rca_ts_YYYY_[version].csv` time series for water cells, separated by year, where `[version]` is the version of the extraction code.
++ `code/rca_extract_0.R` contains first attempts to load RCA data and map cell centers over the Chesapeake Bay outline.
++ `code/rca_extract.R` processes RCA outputs and extracts them for analysis, see the contents of the `data_rca/` data folder described above.
++ `code/hynet_0.R` explores options, on subsampled or simulated data, for creating a hypoxia network.
++ `code/benthos_extract.R` combines the data from raw Excel files from the benthic project with CBTRUST and saves output in `data_benthos/` including `benthos_strata.csv`, `benthos_taxa.csv`, and `benthos_biomass.csv`.
+
 
