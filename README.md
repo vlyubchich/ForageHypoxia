@@ -33,6 +33,7 @@ write.csv(RObjectToSave,
     * `benthos_strata.csv` information about 10 strata of the bay
     * `benthos_taxa.csv` taxonomic classifications of species from the CBTRUST project, but here use an updated file (??) with benthos-specific classifications by Ryan W.
     * `benthos_biomass.csv` biomass information, note that we need to use random sites `SITE_TYPE == "RANDOM"`
+    * `stations_cells.csv`
 + `outputs_Dan_2022-08/` folder with codes and outputs of the summer-2022 volunteer Dan McCrary.
 
 ## Code
@@ -43,5 +44,5 @@ The main files with code are described below, presumably in the order they enter
 + `code/rca_extract.R` processes RCA outputs and extracts them for analysis, see the contents of the `data_rca/` data folder described above.
 + `code/hynet_0.R` explores options, on subsampled or simulated data, for creating a hypoxia network.
 + `code/benthos_extract.R` combines the data from raw Excel files from the benthic project with CBTRUST and saves output in `data_benthos/` including `benthos_strata.csv`, `benthos_taxa.csv`, and `benthos_biomass.csv`.
-
++ `code/stations_cells.R` matches benthic stations with corresponding nearest RCA model cell. The code writes the results into `data_benthos/stations_cells.csv`.
 
