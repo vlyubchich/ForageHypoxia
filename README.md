@@ -33,7 +33,7 @@ write.csv(RObjectToSave,
     * `benthos_strata.csv` information about 10 strata of the bay
     * `benthos_taxa.csv` taxonomic classifications of species from the CBTRUST project, but here use an updated file (??) with benthos-specific classifications by Ryan W.
     * `benthos_biomass.csv` biomass information, note that we need to use random sites `SITE_TYPE == "RANDOM"`
-    * `stations_cells.csv`
++ `data_benthos/stations_cells.csv` benthic stations with corresponding nearest RCA model cells, output of `code/stations_cells.R`
 + `outputs_Dan_2022-08/` folder with codes and outputs of the summer-2022 volunteer Dan McCrary.
 
 ## Code
