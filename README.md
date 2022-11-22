@@ -31,8 +31,9 @@ write.csv(RObjectToSave,
     * [rca_ts_1986-2015_2.zip](https://drive.google.com/file/d/1olRbfDZeov8LvCFU4Yd6n7l4SlHSuNso/view?usp=sharing), 3 GB, time series for water cells, in separate files by year
 + `data_benthos/` folder contains benthic data, mostly extracted from raw Excel files using the code `benthos_extract.R`:
     * `benthos_strata.csv` information about 10 strata of the bay
-    * `benthos_taxa.csv` taxonomic classifications of species from the CBTRUST project, but here use an updated file (??) with benthos-specific classifications by Ryan W.
-    * `benthos_biomass.csv` biomass information, note that we need to use random sites `SITE_TYPE == "RANDOM"`
+    * `benthos_biomass.csv` biomass information, note that we need to use random sites `SITE_TYPE == "RANDOM"`    
+    * `benthos_taxa.csv` taxonomic classifications of species from the CBTRUST project. Ignore this file, use the updated file with initials "rjw" listed below.
++ `data_benthos/Taxa_group_IDs_updated_rjw_v3_1.csv` an updated file (email 2022-11-22) with benthos-specific classifications by Ryan W. Use the "Aggregate_grp" as the ID column.
 + `data_benthos/stations_cells.csv` benthic stations with corresponding nearest RCA model cells, output of `code/stations_cells.R`
 + `outputs_Dan_2022-08/` folder with codes and outputs of the summer-2022 volunteer Dan McCrary.
 

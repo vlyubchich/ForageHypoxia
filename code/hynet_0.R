@@ -1,4 +1,4 @@
-# This script is to test different options for creating the hypoxia network.
+# Test different options for creating the hypoxia network
 
 rm(list = ls())
 library(data.table)
