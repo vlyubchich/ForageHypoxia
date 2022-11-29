@@ -1,9 +1,10 @@
 # ForageHypoxia
 
 ## User memo
-This GitHub repository is for collaborating on the analysis of Chesapeake Bay data, specifically the Maryland Sea Grant project on benthic organisms and hypoxia in the bay. The repository is set as private (not publicly accessible).
+This GitHub repository is for collaborating on the analysis of Chesapeake Bay data, specifically the Maryland Sea Grant project on benthic organisms and hypoxia in the bay. 
 
-1. As a collaborator, you have direct access to the repository **vlyubchich/ForageHypoxia**. Clone it to your computer to your desired location -- this action will create a folder **ForageHypoxia** with all the files inside.
+1. If you are a collaborator, you have direct access to the repository **vlyubchich/ForageHypoxia**. Clone it to your computer to your desired location -- this action will create a folder **ForageHypoxia** with all the files inside.
+If you are not a collaborator, you can fork, edit, then create a pull request for the repository.
 2. Normal RStudio workflow:
     + Open in RStudio the project **ForageHypoxia**.
     + From the RStudio **Git** tab, "Pull" the project to get the most recent version of the files on your computer.
