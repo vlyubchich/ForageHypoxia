@@ -18,3 +18,7 @@ report*/
 *.pptx
 notes*
 Taxa_group_*.xlsx
+
+# ignore large files
+rca_ts_1986-2015_2.csv
+rca_ts_1986-2015_2_biomassCellID.csv
