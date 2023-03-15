@@ -123,7 +123,7 @@ system.time(
         library(vars)
         i <- M_low[v, 1]
         j <- M_low[v, 2]
-        p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, type = "const", exogen = exo)
+        p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 30, type = "const", exogen = exo)
         p_opt <- p_opt$selection["AIC(n)"]
         mod_var <- VAR(Dwide[, .SD, .SDcols = c(i, j)], p = p_opt, type = "const", exogen = exo)
         c(causality(mod_var, cause = Cells[i])$Granger$p.value,
@@ -134,6 +134,44 @@ system.time(
 stopCluster(cl)
 M3 <- matrix(runif(2*nrow(M_low)), nrow = 2)
 
+
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        library(data.table)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        test1 <- lmtest::grangertest(Dwide[, .SD, .SDcols = c(i)], Dwide[, .SD, .SDcols = c(j)], order = 30)$`Pr(>F)`[2]
+        test2 <- lmtest::grangertest(Dwide[, .SD, .SDcols = c(j)], Dwide[, .SD, .SDcols = c(i)], order = 30)$`Pr(>F)`[2]
+        c(test1,
+          test2)
+    })
+)
+80.09 * nrow(M_low) / 1000 / 3600 # 127.4945 hours
+stopCluster(cl)
+M3 <- matrix(runif(2*nrow(M_low)), nrow = 2)
+
+
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        library(data.table)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        res1 <- funtimes::causality_pred(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, p.free = TRUE, B = 0, test = 1)
+        res2 <- funtimes::causality_pred(Dwide[, .SD, .SDcols = c(j, i)], lag.max = 10, p.free = TRUE, B = 0, test = 1)
+        # Selected lags of the cause variables
+        c(res1$FullH0$p[2],
+          res2$FullH0$p[2])
+    })
+)
+422.17 * nrow(M_low) / 1000 / 3600 # 672.0483 hours with lag.max = 30
+58.63 * nrow(M_low) / 1000 / 3600 # 93.33253 hours with lag.max = 10
+stopCluster(cl)
+
+summary(as.vector(M3))
+mean(M3 == 10)*100
+# 2do: run with smaller lag.max or code if statements to run with bigger lag
+# Use p.free, strip down the function of causality_pred.
+
 ## Put back into adjacency matrix ----
 for (v in 1:nrow(M_low)) {
     i <- M_low[v, 1]
@@ -141,6 +179,25 @@ for (v in 1:nrow(M_low)) {
     M[i, j] <- M3[1, v]
     M[j, i] <- M3[2, v]
 }
+
+source("./code/lagcause.R")
+parallel::clusterExport(cl,
+                        varlist = c("Dwide", "M_low", "lagcause"),
+                        envir = environment())
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        library(data.table)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        res1 <- lagcause(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, p.free = TRUE)
+        res2 <- lagcause(Dwide[, .SD, .SDcols = c(j, i)], lag.max = 10, p.free = TRUE)
+        # Selected lags of the cause variables
+        c(res1$FullH0$p[2],
+          res2$FullH0$p[2])
+    })
+)
+
+stopCluster(cl)
 
 # 2do correct for multiple test, by row. (parApply?)
 # p.adjust(, method = "BH") # or Holm
