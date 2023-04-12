@@ -8,12 +8,14 @@
 *cache/
 20*/
 data_rca/
+dataderived/
 literature*/
 report*/
 
 # ignore more files
 .DS_Store
 *.html
+*_files/
 *.pdf
 *.pptx
 notes*

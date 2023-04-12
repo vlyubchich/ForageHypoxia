@@ -13,8 +13,8 @@ q()
 
 cd /local/users/lyubchich/hynet
 # srun -l R CMD BATCH "--vanilla" test_parallel.R # prints 32 cores
-sbatch --nodes=2 --mem=0 --time=5-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1.R
-sbatch --nodes=2 --mem=0 --time=5-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1_2002.R
+# sbatch --nodes=2 --mem=0 --time=5-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1.R
+sbatch --nodes=2 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1_2002.R
 squeue -u lyubchich
 # scancel -u lyubchich
 
@@ -76,6 +76,13 @@ M <- as.matrix(coef(results)[, -1])
 print(results@OptimalLambda)
 saveRDS(M, file = "./dataderived/BigVAR_2011_coef_test.rds")
 
+# Without running cross-validation, with fixed lambda
+mod3 <- BigVAR.fit(Dwide_mat[,c(1, 100, 200)*10],
+                   p = 30,
+                   struct = "Basic",
+                   lambda = 2,
+                   intercept = TRUE)
+
 
 # Load VAR ----
 
@@ -94,83 +101,3 @@ if (FALSE) {
                                  lagmax, ".rds"))
 }
 
-## Process coefficients ----
-lagmax = 3
-Mcoef <- readRDS(paste0("./dataderived/BigVAR_2011_coef_lagmax",
-                        lagmax, ".rds"))
-Mcoef <- as.matrix(Mcoef)
-# For each spatial cell (row),
-Alag <- Acoef <- matrix(0, nrow(Mcoef), nrow(Mcoef))
-for (i in 1:nrow(Mcoef)) { # i = j = 1
-    for (j in 1:nrow(Mcoef)) {
-        # Lagged coeffs of the j's variable
-        js <- (j - 1) * lagmax + 1
-        js <- js:(js + lagmax - 1)
-        x <- abs(Mcoef[i, js])
-        # Check if not zero, then update
-        if (any(x != 0)) {
-            Alag[i, j] <- which.max(x)
-            # Weighted average, inverse proportional to the lag
-            # but do not divide because of too small values (for numerical stability)
-            Acoef[i, j] <- sum(x / 1:lagmax) #/ sum(1 / 1:lagmax)
-        }
-    }
-    if (i %% 100 == 0) {
-        print(paste(i, Sys.time()))
-    }
-}
-Alag[1:5, 1:5]
-Acoef[1:5, 1:5]
-
-## Network ----
-library(dplyr)
-library(igraph)
-# library(network)
-# If subsample
-ss <- 1:500
-
-rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
-    filter(FSM == 1) %>%
-    mutate(CellID = paste0("x", CellID))
-
-# NET <- network::network(Acoef,
-#                         matrix.type = "adjacency",
-#                         directed = TRUE,
-#                         loops = FALSE)
-g <- igraph::graph_from_adjacency_matrix(Acoef#[ss, ss]
-                                         ,weighted = TRUE
-                                         ,mode = "directed"
-                                         ,diag = FALSE)
-coords <- layout_(g, as_star())
-summary(coords)
-# from -1 to 1
-# library(scales)
-coords <- rca_cells[ss, ] %>%
-    mutate(lon = scales::rescale(LON, to = c(-1, 1)),
-           lat = scales::rescale(LAT, to = c(-1, 1)),
-           .keep = "none") %>%
-    as.matrix()
-
-# devtools::install_github("wjrl/RBioFabric")
-# library(RBioFabric)
-#
-# height <- vcount(g)
-# width <- ecount(g)
-# aspect <- height / width
-# plotWidth <- 10
-# plotHeight <- 2 #plotWidth * (aspect * 1.2)
-#
-# pdf("images/BioFabric_2011.pdf", width = plotWidth, height = plotHeight)
-# bioFabric(g, dropNodeLabels = TRUE, dropZoneLabels = TRUE)
-# dev.off()
-
-g_dd_in <- degree(g, mode = "in")
-hist(g_dd_in)
-g_dd_out <- degree(g, mode = "out")
-hist(g_dd_out)
-
-# map of degrees, centralities
-
-
-kc <- igraph::cluster_edge_betweenness(g)
-kc

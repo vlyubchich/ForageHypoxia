@@ -1,0 +1,216 @@
+---
+title: "HyNet overview"
+format: 
+    html:
+        code-fold: false
+        code-link: false
+        theme: cosmo
+        fig-width: 8
+        fig-height: 5
+knitr:
+    opts_chunk:
+        collapse: false
+        message: false
+        warning: false
+        comment: "#>"
+---
+
+# Packages and functions
+
+```{r}
+#| echo: false
+
+rm(list = ls())
+options(digits = 3)
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+library(maptools)
+
+library(igraph)
+source("../code/fun_create_adj.R")
+```
+
+
+# Data
+
+```{r}
+# Load Ches Bay shape file
+shoreline <- maptools::readShapePoly("../CBnet_shoreline/final_shoreline.shp")
+shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
+rca_cells <- data.table::fread("../data_rca/rca_cells_2.csv") %>%
+    filter(FSM == 1) %>%
+    mutate(CellID = paste0("x", CellID))
+#Use info from the shape file to find projections for the stations
+###http://www.prj2epsg.org/search
+###26918 - NAD_1983_UTM_Zone_18N
+###http://spatialreference.org/ref/epsg/26918/
+tmp <- rgdal::project(cbind(360 + rca_cells$LON, rca_cells$LAT),
+                      proj = "+proj=utm +zone=18 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+rca_cells <- rca_cells %>% 
+    mutate(lon = tmp[, 1],
+           lat = tmp[, 2])
+```
+
+```{r}
+lagmax = 3
+```
+
+Below are results of using BigVAR models on the years 2002 and 2011 with maximum lag of `r lagmax` days.
+
+```{r}
+# Load model coefficients
+Mcoef2002 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2002_coef_lagmax",
+                                      lagmax, ".rds")))
+Mcoef2011 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2011_coef_lagmax",
+                                      lagmax, ".rds")))
+```
+
+
+# Network
+
+## VAR results into networks
+
+Process VAR results into adjacency matrices.
+
+```{r}
+#| cache: true
+
+proc2002 <- create_adj(Mcoef2002)
+proc2011 <- create_adj(Mcoef2011)
+```
+
+Create weighted directed networks, where edge weight is the average weighted coefficient.
+
+```{r}
+# If subsample
+# set.seed(123)
+# ss <- sort(sample(3300, 500))
+# If not subsample
+ss <- 1:nrow(rca_cells)
+```
+
+```{r}
+#| cache: true
+
+# Create networks
+g2002 <- igraph::graph_from_adjacency_matrix(proc2002$Acoef[ss, ss]
+                                             ,weighted = TRUE
+                                             ,mode = "directed"
+                                             ,diag = FALSE)
+g2011 <- igraph::graph_from_adjacency_matrix(proc2011$Acoef[ss, ss]
+                                             ,weighted = TRUE
+                                             ,mode = "directed"
+                                             ,diag = FALSE)
+# Network stats
+D <- rca_cells[ss, ] %>%
+    mutate(deg_in_2002 = degree(g2002, mode = "in"),
+           deg_in_2011 = degree(g2011, mode = "in"),
+           deg_out_2002 = degree(g2002, mode = "out"),
+           deg_out_2011 = degree(g2011, mode = "out"),
+           clos_out_2002 = closeness(g2002, mode = "out"),
+           clos_out_2011 = closeness(g2011, mode = "out"))
+```
+
+
+## Compare 2002 and 2011
+
+Numeric summaries.
+
+```{r}
+D %>% 
+    select(!c(CellID, H, DX, DY, LAT, LON, FSM)) %>% 
+    psych::describe(quant = c(0.1, 0.25, 0.5, 0.75, 0.90)) %>% 
+    t()
+```
+
+
+```{r}
+#| label: fig-deg
+#| fig-cap: "Degree distributions of the two networks."
+#| fig-height: 7
+
+p1 <- ggplot(D, aes(x = deg_in_2002)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = deg_in_2011)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p3 <- ggplot(D, aes(x = deg_out_2002)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p4 <- ggplot(D, aes(x = deg_out_2011)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+(p1 + p2) / (p3 + p4) +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+```{r}
+#| label: fig-deg-map
+#| fig-cap: "Maps of the node degrees in the two networks."
+#| fig-height: 7
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+p2 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+p3 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+(p1 + p2) / (p3 + p4) +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+
+```{r}
+#| label: fig-clos
+#| fig-cap: "Distributions of the closeness centrality of the two networks."
+
+p1 <- ggplot(D, aes(x = clos_out_2002)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = clos_out_2011)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+```{r}
+#| label: fig-clos-map
+#| fig-cap: "Maps of the node closeness centrality in the two networks."
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point()
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+
