@@ -4,6 +4,7 @@
 .Ruserdata
 
 # ignore folders
+Allison*/
 *delete/
 *cache/
 20*/
