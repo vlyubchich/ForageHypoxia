@@ -5,8 +5,12 @@ format:
         code-fold: false
         code-link: false
         theme: cosmo
-        fig-width: 8
-        fig-height: 5
+        fig-width: 12
+        fig-height: 7
+        page-layout: full
+        toc: true
+        toc-location: left
+        number-sections: true
 knitr:
     opts_chunk:
         collapse: false
@@ -42,7 +46,7 @@ source("../code/fun_create_adj.R")
 ```{r}
 # Load Ches Bay shape file
 shoreline <- maptools::readShapePoly("../CBnet_shoreline/final_shoreline.shp")
-shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
+# shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
 rca_cells <- data.table::fread("../data_rca/rca_cells_2.csv") %>%
     filter(FSM == 1) %>%
     mutate(CellID = paste0("x", CellID))
@@ -85,6 +89,27 @@ proc2002 <- create_adj(Mcoef2002)
 proc2011 <- create_adj(Mcoef2011)
 ```
 
+Explore coefficients.
+
+```{r}
+summary(as.vector(proc2002$Acoef))
+summary(as.vector(proc2011$Acoef))
+```
+
+Additionally threshold coefficients.
+
+```{r}
+proc2002$Acoef[proc2002$Acoef < 0.0001] <- 0
+proc2011$Acoef[proc2011$Acoef < 0.0001] <- 0
+```
+
+Explore lags.
+
+```{r}
+summary(as.vector(proc2002$Alag))
+summary(as.vector(proc2011$Alag))
+```
+
 Create weighted directed networks, where edge weight is the average weighted coefficient.
 
 ```{r}
@@ -114,7 +139,9 @@ D <- rca_cells[ss, ] %>%
            deg_out_2002 = degree(g2002, mode = "out"),
            deg_out_2011 = degree(g2011, mode = "out"),
            clos_out_2002 = closeness(g2002, mode = "out"),
-           clos_out_2011 = closeness(g2011, mode = "out"))
+           clos_out_2011 = closeness(g2011, mode = "out"),
+           cent_2002 = eigen_centrality(g2002, directed = TRUE)$vector,
+           cent_2011 = eigen_centrality(g2011, directed = TRUE)$vector)
 ```
 
 
@@ -124,7 +151,7 @@ Numeric summaries.
 
 ```{r}
 D %>% 
-    select(!c(CellID, H, DX, DY, LAT, LON, FSM)) %>% 
+    select(!c(CellID, H, DX, DY, LAT, LON, FSM, lat, lon)) %>% 
     psych::describe(quant = c(0.1, 0.25, 0.5, 0.75, 0.90)) %>% 
     t()
 ```
@@ -154,28 +181,29 @@ p4 <- ggplot(D, aes(x = deg_out_2011)) +
 ```{r}
 #| label: fig-deg-map
 #| fig-cap: "Maps of the node degrees in the two networks."
-#| fig-height: 7
+#| fig-height: 11
 
+sz = 1
 p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2002)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 p2 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2011)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 p3 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2002)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 (p1 + p2) / (p3 + p4) +
     plot_annotation(tag_levels = 'A') & theme_light()
 ```
@@ -203,14 +231,45 @@ p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002)) +
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
-    geom_point()
+    geom_point(size = sz)
 p1 + p2 +
     plot_annotation(tag_levels = 'A') & theme_light()
 ```
 
+```{r}
+#| label: fig-cent
+#| fig-cap: "Distributions of the eigenvector centrality of the two networks."
+
+p1 <- ggplot(D, aes(x = cent_2002)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = cent_2011)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
+    ylab("Density")
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+```{r}
+#| label: fig-cent-map
+#| fig-cap: "Maps of the node eigenvector centrality in the two networks."
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = cent_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p2 <- ggplot(D, aes(x = lon, y = lat, color = cent_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
 

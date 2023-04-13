@@ -17,6 +17,7 @@ report*/
 .DS_Store
 *.html
 *_files/
+*/rsconnect/
 *.pdf
 *.pptx
 notes*
