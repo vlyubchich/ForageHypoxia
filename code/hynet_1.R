@@ -15,6 +15,7 @@ cd /local/users/lyubchich/hynet
 # srun -l R CMD BATCH "--vanilla" test_parallel.R # prints 32 cores
 # sbatch --nodes=2 --mem=0 --time=5-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1.R
 sbatch --nodes=2 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1_2002.R
+sbatch --nodes=1 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2002.R
 squeue -u lyubchich
 # scancel -u lyubchich
 
