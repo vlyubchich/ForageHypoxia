@@ -14,7 +14,7 @@ create_adj <- function(X,
         }
     }
     Alag <- Acoef <- matrix(0, nrow(X), nrow(X))
-    weigts_sum <- sum(1 / 1:lagmax)
+    # weigts_sum <- sum(1 / 1:lagmax)
     for (i in 1:nrow(X)) { # i = j = 1
         js <- 1:lagmax
         for (j in 1:nrow(X)) {
@@ -22,9 +22,12 @@ create_adj <- function(X,
             x <- abs(X[i, js])
             # Check if not zero, then update
             if (any(x != 0)) {
-                Alag[j, i] <- which.max(x)
+                phat <- max(which(x != 0))
+                Alag[j, i] <- phat
+                # Remove last 0s
+                x <- x[1:phat]
                 # Weighted average, inverse proportional to the lag
-                Acoef[j, i] <- sum(x / 1:lagmax) / weigts_sum
+                Acoef[j, i] <- sum(x / 1:phat) / sum(1 / 1:phat)
             }
             js <- js + lagmax
         }

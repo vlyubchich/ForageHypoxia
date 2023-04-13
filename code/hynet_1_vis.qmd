@@ -1,5 +1,6 @@
 ---
 title: "HyNet overview"
+date: today
 format: 
     html:
         code-fold: false
