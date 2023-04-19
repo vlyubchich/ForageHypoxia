@@ -1,6 +1,7 @@
 ---
 title: "HyNet overview"
 date: today
+date-format: iso
 format: 
     html:
         code-fold: false
@@ -84,7 +85,7 @@ Mcoef2011 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2011_coef_lagmax",
 Process VAR results into adjacency matrices.
 
 ```{r}
-#| cache: true
+#| cache: false
 
 proc2002 <- create_adj(Mcoef2002)
 proc2011 <- create_adj(Mcoef2011)
@@ -122,7 +123,7 @@ ss <- 1:nrow(rca_cells)
 ```
 
 ```{r}
-#| cache: true
+#| cache: false
 
 # Create networks
 g2002 <- igraph::graph_from_adjacency_matrix(proc2002$Acoef[ss, ss]
@@ -184,7 +185,13 @@ p4 <- ggplot(D, aes(x = deg_out_2011)) +
 #| fig-cap: "Maps of the node degrees in the two networks."
 #| fig-height: 11
 
+# Size of points on the map
 sz = 1
+# Aspect ratio for lat and lon
+# https://stackoverflow.com/questions/66018518/aspect-ratio-for-lat-lon-plots
+lat_mean <- mean(rca_cells$LAT)
+rto <- 1 / cos(lat_mean * pi / 180)
+
 p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2002)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
@@ -206,7 +213,9 @@ p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011)) +
                  color = "black", fill = NA) + 
     geom_point(size = sz)
 (p1 + p2) / (p3 + p4) +
-    plot_annotation(tag_levels = 'A') & theme_light()
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
 ```
 
 
@@ -221,7 +230,8 @@ p2 <- ggplot(D, aes(x = clos_out_2011)) +
     geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
     ylab("Density")
 p1 + p2 +
-    plot_annotation(tag_levels = 'A') & theme_light()
+    plot_annotation(tag_levels = 'A') & 
+    theme_light()
 ```
 
 ```{r}
@@ -239,7 +249,9 @@ p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011)) +
                  color = "black", fill = NA) + 
     geom_point(size = sz)
 p1 + p2 +
-    plot_annotation(tag_levels = 'A') & theme_light()
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
 ```
 
 ```{r}
@@ -253,7 +265,8 @@ p2 <- ggplot(D, aes(x = cent_2011)) +
     geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
     ylab("Density")
 p1 + p2 +
-    plot_annotation(tag_levels = 'A') & theme_light()
+    plot_annotation(tag_levels = 'A') & 
+    theme_light()
 ```
 
 ```{r}
@@ -271,6 +284,8 @@ p2 <- ggplot(D, aes(x = lon, y = lat, color = cent_2011)) +
                  color = "black", fill = NA) + 
     geom_point(size = sz)
 p1 + p2 +
-    plot_annotation(tag_levels = 'A') & theme_light()
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
 ```
 
