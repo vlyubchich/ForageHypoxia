@@ -6,12 +6,14 @@ library(data.table)
 library(dplyr)
 library(BigVAR)
 
+year = 2002
+
 
 # Data ----
 # rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
 #     filter(FSM == 1) %>%
 #     mutate(CellID = paste0("x", CellID))
-D <- data.table::fread("./data_rca/rca_ts_2002_2.csv",
+D <- data.table::fread(paste0("./data_rca/rca_ts_", year, "_2.csv"),
                        select = c("DOAVEG_avg", "CellID", "Date")) %>%
     mutate(CellID = paste0("x", CellID))
 head(D)
@@ -97,8 +99,8 @@ for (i in 1:(ncol(Dwide_mat) - 1)) {
     }
 }
 saveRDS(Gp,
-        file = "./dataderived/BigVAR_2002_Gp.rds")
+        file = paste0("./dataderived/BigVAR_", year, "_Gp.rds"))
 saveRDS(Alag,
-        file = "./dataderived/BigVAR_2002_Alag.rds")
+        file = paste0("./dataderived/BigVAR_", year, "_Alag.rds"))
 saveRDS(Acoef,
-        file = "./dataderived/BigVAR_2002_Acoef.rds")
+        file = paste0("./dataderived/BigVAR_", year, "_Acoef.rds"))
