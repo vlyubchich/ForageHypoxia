@@ -2,9 +2,12 @@
 title: "HyNet overview"
 date: today
 date-format: iso
+bibliography:
+    - ref_ForageHypoxia.bib
+csl: springer-basicVL.csl
 format: 
     html:
-        code-fold: false
+        code-fold: true
         code-link: false
         theme: cosmo
         fig-width: 12
@@ -28,8 +31,12 @@ knitr:
 
 rm(list = ls())
 options(digits = 3)
+
+# Significance level
+alpha = 0.05
 ```
 
+Load required packages and functions.
 
 ```{r}
 library(dplyr)
@@ -64,45 +71,47 @@ rca_cells <- rca_cells %>%
 ```
 
 ```{r}
-lagmax = 3
+lagmax = 30
 ```
 
-Below are results of using BigVAR models on the years 2002 and 2011 with maximum lag of `r lagmax` days.
+Load results for the years 2002 and 2011 with maximum lag of `r lagmax` days.
 
 ```{r}
 # Load model coefficients
-Mcoef2002 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2002_coef_lagmax",
-                                      lagmax, ".rds")))
-Mcoef2011 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2011_coef_lagmax",
-                                      lagmax, ".rds")))
+# Mcoef2002 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2002_coef_lagmax",
+#                                       lagmax, ".rds")))
+# Mcoef2011 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2011_coef_lagmax",
+#                                       lagmax, ".rds")))
+Mcoef2002 <- readRDS("../dataderived/VARpairs_2002.rds")
+Mcoef2011 <- readRDS("../dataderived/VARpairs_2011.rds")
 ```
 
 
 # Network
 
-## VAR results into networks
+## Network construction
 
-Process VAR results into adjacency matrices.
+Process results into adjacency matrices.
 
 ```{r}
 #| cache: false
 
-proc2002 <- create_adj(Mcoef2002)
-proc2011 <- create_adj(Mcoef2011)
+proc2002 <- create_adj_pairs(Mcoef2002)
+proc2011 <- create_adj_pairs(Mcoef2011)
 ```
 
 Explore coefficients.
 
 ```{r}
-summary(as.vector(proc2002$Acoef))
-summary(as.vector(proc2011$Acoef))
+summary(as.vector(proc2002$Acoef[!is.na(proc2002$Acoef)]))
+summary(as.vector(proc2011$Acoef[!is.na(proc2011$Acoef)]))
 ```
 
 Additionally threshold coefficients.
 
 ```{r}
-proc2002$Acoef[proc2002$Acoef < 0.0001] <- 0
-proc2011$Acoef[proc2011$Acoef < 0.0001] <- 0
+proc2002$Acoef[proc2002$Acoef < 0.01] <- 0
+proc2011$Acoef[proc2011$Acoef < 0.01] <- 0
 ```
 
 Explore lags.
@@ -110,6 +119,22 @@ Explore lags.
 ```{r}
 summary(as.vector(proc2002$Alag))
 summary(as.vector(proc2011$Alag))
+```
+
+Additionally adjust the Granger test $p$-values for the number of tests. 
+Here by the family of tests we understand the number of relationships tested between each $i$th spatial cell ($i = 1, \dots,$ `r nrow(rca_cells)`) and a cell $j$, $j \neq i$. 
+To control the false discovery rate in each family of tests, we use Benjamini--Hochberg (BH) or Benjamini--Yekutieli (BY) adjustment. 
+The false discovery rate is a less stringent condition than the family-wise error rate, so these methods are more powerful than other methods such as the Bonferroni correction.
+The BY procedure is more conservative than the BH procedure.
+
+```{r}
+tmp_BH <- apply(proc2002$Gp, 2, p.adjust, method = "BH")
+tmp_BY <- apply(proc2002$Gp, 2, p.adjust, method = "BY")
+summary(as.vector(tmp_BH[!is.na(tmp_BH)]))
+summary(as.vector(tmp_BY[!is.na(tmp_BY)]))
+
+proc2002$Gp <- tmp_BY #apply(proc2002$Gp, 2, p.adjust, method = "BY")
+proc2011$Gp <- apply(proc2011$Gp, 2, p.adjust, method = "BY")
 ```
 
 Create weighted directed networks, where edge weight is the average weighted coefficient.
@@ -122,28 +147,63 @@ Create weighted directed networks, where edge weight is the average weighted coe
 ss <- 1:nrow(rca_cells)
 ```
 
+Calculate network stats.
+
+Closeness centrality captures the notion that a vertex is 'central' if it is 'close' to many other vertices.
+$$
+C_{clos}(v) = \frac{1}{\sum_{u \in V} dist(v, u)},
+$$
+where $dist(v, u)$ is the geodesic distance (distance over the network) between the vertices $u, v \in V$.
+Often the normalization factor $N_v - 1$ is used so $C_{clos}(v) \in [0, 1]$ [Section 4.2.2 in @Kolaczyk:Csardi:2014]. 
+
+Eigenvector centrality measures a node's importance by considering the importance of its neighbors. 
+This makes the eigenvector centrality suitable for measuring importance of a node. 
+It is represented by the principal eigenvector of the adjacency matrix, and is similar to the core of Google's PageRank algorithm, which they use to rank web pages.
+
 ```{r}
-#| cache: false
+#| cache: true
 
 # Create networks
+# - based on penalized pairwise VAR coefficients
 g2002 <- igraph::graph_from_adjacency_matrix(proc2002$Acoef[ss, ss]
                                              ,weighted = TRUE
                                              ,mode = "directed"
                                              ,diag = FALSE)
+# - based on Granger p-values
+g2002G <- igraph::graph_from_adjacency_matrix(proc2002$Gp[ss, ss] < alpha
+                                             ,weighted = NULL
+                                             ,mode = "directed"
+                                             ,diag = FALSE)
+# - based on penalized pairwise VAR coefficients
 g2011 <- igraph::graph_from_adjacency_matrix(proc2011$Acoef[ss, ss]
                                              ,weighted = TRUE
                                              ,mode = "directed"
                                              ,diag = FALSE)
+# - based on Granger p-values
+g2011G <- igraph::graph_from_adjacency_matrix(proc2011$Gp[ss, ss] < alpha
+                                             ,weighted = NULL
+                                             ,mode = "directed"
+                                             ,diag = FALSE)
+
 # Network stats
 D <- rca_cells[ss, ] %>%
     mutate(deg_in_2002 = degree(g2002, mode = "in"),
            deg_in_2011 = degree(g2011, mode = "in"),
+           deg_in_2002G = degree(g2002G, mode = "in"),
+           deg_in_2011G = degree(g2011G, mode = "in"),
            deg_out_2002 = degree(g2002, mode = "out"),
            deg_out_2011 = degree(g2011, mode = "out"),
+           deg_out_2002G = degree(g2002G, mode = "out"),
+           deg_out_2011G = degree(g2011G, mode = "out"),
            clos_out_2002 = closeness(g2002, mode = "out"),
            clos_out_2011 = closeness(g2011, mode = "out"),
+           clos_out_2002G = closeness(g2002G, mode = "out"),
+           clos_out_2011G = closeness(g2011G, mode = "out"),
            cent_2002 = eigen_centrality(g2002, directed = TRUE)$vector,
-           cent_2011 = eigen_centrality(g2011, directed = TRUE)$vector)
+           cent_2011 = eigen_centrality(g2011, directed = TRUE)$vector,
+           cent_2002G = eigen_centrality(g2002G, directed = TRUE)$vector,
+           cent_2011G = eigen_centrality(g2011G, directed = TRUE)$vector
+           )
 ```
 
 
@@ -154,14 +214,16 @@ Numeric summaries.
 ```{r}
 D %>% 
     select(!c(CellID, H, DX, DY, LAT, LON, FSM, lat, lon)) %>% 
-    psych::describe(quant = c(0.1, 0.25, 0.5, 0.75, 0.90)) %>% 
-    t()
+    psych::describe(quant = c(0.1, 0.25, 0.5, 0.75, 0.90)) #%>%
+    # t()
 ```
 
 
+### VAR-based networks
+
 ```{r}
 #| label: fig-deg
-#| fig-cap: "Degree distributions of the two networks."
+#| fig-cap: "Degree distributions of the two networks *based on penalized pairwise VAR coefficients.*"
 #| fig-height: 7
 
 p1 <- ggplot(D, aes(x = deg_in_2002)) + 
@@ -182,7 +244,7 @@ p4 <- ggplot(D, aes(x = deg_out_2011)) +
 
 ```{r}
 #| label: fig-deg-map
-#| fig-cap: "Maps of the node degrees in the two networks."
+#| fig-cap: "Maps of the node degrees in the two networks *based on penalized pairwise VAR coefficients.*"
 #| fig-height: 11
 
 # Size of points on the map
@@ -218,16 +280,15 @@ p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011)) +
     coord_fixed(ratio = rto)
 ```
 
-
 ```{r}
 #| label: fig-clos
-#| fig-cap: "Distributions of the closeness centrality of the two networks."
+#| fig-cap: "Distributions of the closeness centrality of the networks *based on penalized pairwise VAR coefficients.*"
 
 p1 <- ggplot(D, aes(x = clos_out_2002)) + 
-    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "grey50") +
     ylab("Density")
 p2 <- ggplot(D, aes(x = clos_out_2011)) + 
-    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "grey50") +
     ylab("Density")
 p1 + p2 +
     plot_annotation(tag_levels = 'A') & 
@@ -236,7 +297,7 @@ p1 + p2 +
 
 ```{r}
 #| label: fig-clos-map
-#| fig-cap: "Maps of the node closeness centrality in the two networks."
+#| fig-cap: "Maps of the node closeness centrality in the two networks *based on penalized pairwise VAR coefficients.*"
 
 p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002)) + 
     geom_polygon(data = shoreline, 
@@ -256,7 +317,7 @@ p1 + p2 +
 
 ```{r}
 #| label: fig-cent
-#| fig-cap: "Distributions of the eigenvector centrality of the two networks."
+#| fig-cap: "Distributions of the eigenvector centrality of the two networks *based on penalized pairwise VAR coefficients.*"
 
 p1 <- ggplot(D, aes(x = cent_2002)) + 
     geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
@@ -271,7 +332,7 @@ p1 + p2 +
 
 ```{r}
 #| label: fig-cent-map
-#| fig-cap: "Maps of the node eigenvector centrality in the two networks."
+#| fig-cap: "Maps of the node eigenvector centrality in the two networks *based on penalized pairwise VAR coefficients.*"
 
 p1 <- ggplot(D, aes(x = lon, y = lat, color = cent_2002)) + 
     geom_polygon(data = shoreline, 
@@ -289,3 +350,127 @@ p1 + p2 +
     coord_fixed(ratio = rto)
 ```
 
+
+### Granger causality-based networks
+
+```{r}
+#| label: fig-degG
+#| fig-cap: "Degree distributions of the two networks *based on pairwise Granger causality tests.*"
+#| fig-height: 7
+
+p1 <- ggplot(D, aes(x = deg_in_2002G)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = deg_in_2011G)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p3 <- ggplot(D, aes(x = deg_out_2002G)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+p4 <- ggplot(D, aes(x = deg_out_2011G)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+    ylab("Density")
+(p1 + p2) / (p3 + p4) +
+    plot_annotation(tag_levels = 'A') & theme_light()
+```
+
+```{r}
+#| label: fig-degG-map
+#| fig-cap: "Maps of the node degrees in the two networks *based on pairwise Granger causality tests.*"
+#| fig-height: 11
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2002G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p2 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2011G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p3 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2002G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+(p1 + p2) / (p3 + p4) +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
+```
+
+```{r}
+#| label: fig-closG
+#| fig-cap: "Distributions of the closeness centrality of the networks *based on pairwise Granger causality tests.*"
+
+p1 <- ggplot(D, aes(x = clos_out_2002G)) + 
+    geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = clos_out_2011G)) + 
+    geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "grey50") +
+    ylab("Density")
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light()
+```
+
+```{r}
+#| label: fig-closG-map
+#| fig-cap: "Maps of the node closeness centrality in the two networks *based on pairwise Granger causality tests.*"
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
+```
+
+```{r}
+#| label: fig-centG
+#| fig-cap: "Distributions of the eigenvector centrality of the two networks *based on pairwise Granger causality tests.*"
+
+p1 <- ggplot(D, aes(x = cent_2002)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
+    ylab("Density")
+p2 <- ggplot(D, aes(x = cent_2011)) + 
+    geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
+    ylab("Density")
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light()
+```
+
+```{r}
+#| label: fig-centG-map
+#| fig-cap: "Maps of the node eigenvector centrality in the two networks *based on pairwise Granger causality tests.*"
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = cent_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p2 <- ggplot(D, aes(x = lon, y = lat, color = cent_2011)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz)
+p1 + p2 +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
+```

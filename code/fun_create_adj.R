@@ -40,3 +40,28 @@ create_adj <- function(X,
     return(list(Alag = Alag,
                 Acoef = Acoef))
 }
+
+# Create adjacency matrices with lags and averaged coefficients
+# and pairwise Granger p-values
+# from rows to columns
+if (FALSE) {
+    X <- readRDS("./dataderived/VARpairs_2002.rds")
+}
+create_adj_pairs <- function(X) {
+    # X is a list of pairwise results
+    n <- length(X) + 1
+    Alag <- Acoef <- Gp <- matrix(0, n, n)
+    for (i in 1:(n - 1)) { # i = 1
+        x <- X[[i]]
+        Alag[i, x$Js] <- x$Alag_ij
+        Alag[x$Js, i] <- x$Alag_ji
+        Acoef[i, x$Js] <- x$Acoef_ij
+        Acoef[x$Js, i] <- x$Acoef_ji
+        Gp[i, x$Js] <- x$Gp_ij
+        Gp[x$Js, i] <- x$Gp_ji
+    }
+    diag(Alag) <- diag(Acoef) <- diag(Gp) <- NA
+    return(list(Alag = Alag,
+                Acoef = Acoef,
+                Gp = Gp))
+}
