@@ -281,6 +281,28 @@ p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011)) +
 ```
 
 ```{r}
+#| label: fig-deg-map-diff
+#| fig-cap: "Maps of the node degree differences.*"
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2011 - deg_in_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz) + 
+    scale_color_continuous(type = "viridis")
+p2 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011 - deg_out_2002)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz) + 
+    scale_color_continuous(type = "viridis")
+(p1 + p2) +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
+```
+
+```{r}
 #| label: fig-clos
 #| fig-cap: "Distributions of the closeness centrality of the networks *based on penalized pairwise VAR coefficients.*"
 
@@ -406,6 +428,28 @@ p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011G)) +
 ```
 
 ```{r}
+#| label: fig-degG-map-diff
+#| fig-cap: "Maps of the node degree differences."
+
+p1 <- ggplot(D, aes(x = lon, y = lat, color = deg_in_2011G - deg_in_2002G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz) + 
+    scale_color_continuous(type = "viridis")
+p2 <- ggplot(D, aes(x = lon, y = lat, color = deg_out_2011G - deg_out_2002G)) + 
+    geom_polygon(data = shoreline, 
+                 aes(x = long, y = lat, group = group), 
+                 color = "black", fill = NA) + 
+    geom_point(size = sz) + 
+    scale_color_continuous(type = "viridis")
+(p1 + p2) +
+    plot_annotation(tag_levels = 'A') & 
+    theme_light() & 
+    coord_fixed(ratio = rto)
+```
+
+```{r}
 #| label: fig-closG
 #| fig-cap: "Distributions of the closeness centrality of the networks *based on pairwise Granger causality tests.*"
 
@@ -424,12 +468,12 @@ p1 + p2 +
 #| label: fig-closG-map
 #| fig-cap: "Maps of the node closeness centrality in the two networks *based on pairwise Granger causality tests.*"
 
-p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002)) + 
+p1 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2002G)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
     geom_point(size = sz)
-p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011)) + 
+p2 <- ggplot(D, aes(x = lon, y = lat, color = clos_out_2011G)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
@@ -444,10 +488,10 @@ p1 + p2 +
 #| label: fig-centG
 #| fig-cap: "Distributions of the eigenvector centrality of the two networks *based on pairwise Granger causality tests.*"
 
-p1 <- ggplot(D, aes(x = cent_2002)) + 
+p1 <- ggplot(D, aes(x = cent_2002G)) + 
     geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
     ylab("Density")
-p2 <- ggplot(D, aes(x = cent_2011)) + 
+p2 <- ggplot(D, aes(x = cent_2011G)) + 
     geom_histogram(aes(y = after_stat(density)), binwidth = 0.01, fill = "grey50") +
     ylab("Density")
 p1 + p2 +
@@ -459,12 +503,12 @@ p1 + p2 +
 #| label: fig-centG-map
 #| fig-cap: "Maps of the node eigenvector centrality in the two networks *based on pairwise Granger causality tests.*"
 
-p1 <- ggplot(D, aes(x = lon, y = lat, color = cent_2002)) + 
+p1 <- ggplot(D, aes(x = lon, y = lat, color = cent_2002G)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
     geom_point(size = sz)
-p2 <- ggplot(D, aes(x = lon, y = lat, color = cent_2011)) + 
+p2 <- ggplot(D, aes(x = lon, y = lat, color = cent_2011G)) + 
     geom_polygon(data = shoreline, 
                  aes(x = long, y = lat, group = group), 
                  color = "black", fill = NA) + 
