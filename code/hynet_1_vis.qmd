@@ -55,7 +55,7 @@ source("../code/fun_create_adj.R")
 ```{r}
 # Load Ches Bay shape file
 shoreline <- maptools::readShapePoly("../CBnet_shoreline/final_shoreline.shp")
-# shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
+shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
 rca_cells <- data.table::fread("../data_rca/rca_cells_2.csv") %>%
     filter(FSM == 1) %>%
     mutate(CellID = paste0("x", CellID))
@@ -82,8 +82,10 @@ Load results for the years 2002 and 2011 with maximum lag of `r lagmax` days.
 #                                       lagmax, ".rds")))
 # Mcoef2011 <- as.matrix(readRDS(paste0("../dataderived/BigVAR_2011_coef_lagmax",
 #                                       lagmax, ".rds")))
-Mcoef2002 <- readRDS("../dataderived/VARpairs_2002.rds")
-Mcoef2011 <- readRDS("../dataderived/VARpairs_2011.rds")
+# Mcoef2002 <- readRDS("../dataderived/VARpairs_2002.rds")
+# Mcoef2011 <- readRDS("../dataderived/VARpairs_2011.rds")
+Mcoef2002 <- readRDS("../dataderived/CAUSpairs_2002.rds")
+Mcoef2011 <- readRDS("../dataderived/CAUSpairs_2011.rds")
 ```
 
 
