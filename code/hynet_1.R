@@ -17,6 +17,10 @@ cd /local/users/lyubchich/hynet
 sbatch --nodes=2 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1_2002.R
 sbatch --nodes=1 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2011.R
 sbatch --nodes=1 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1986.R
+sbatch --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1991.R
+sbatch -w statcluster-n0 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1998.R
+# up to 2005
+sbatch -w statcluster-n0 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2001.R
 squeue -u lyubchich
 # scancel -u lyubchich
 

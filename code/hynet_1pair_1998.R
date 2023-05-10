@@ -7,7 +7,7 @@ library(dplyr)
 library(BigVAR)
 library(parallel)
 
-year = 2002
+year = 1998
 lagmax = 30L
 
 

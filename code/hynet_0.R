@@ -18,7 +18,8 @@ head(D)
 nrow(D) / 3386
 
 nodes <- unique(D$CellID)
-# Plot some time series
+
+## Plot some time series ----
 tmp <- c("x332", sample(nodes, 5))
 D %>%
     filter(is.element(CellID, tmp)) %>%
@@ -33,7 +34,7 @@ d <- D %>%
     mutate(sin2 = sin(2 * pi * day_year/365.25),
            cos2 = cos(2 * pi * day_year/365.25))
 
-# Remove seasonality
+## Remove 1 seasonality ----
 mod0 <- lm(DOAVEG_avg ~ sin2 + cos2, data = d)
 d %>%
     mutate(mod0_resid = residuals(mod0)) %>%
@@ -65,6 +66,7 @@ M_low <- which(lower.tri(M), arr.ind = TRUE)
 
 
 ## sequential ----
+
 system.time(
     for (v in 1:1000) { # v = 5
         i <- M_low[v, 1]
@@ -78,7 +80,24 @@ system.time(
 )
 12.01 * nrow(M_low) / 1000 / 3600 # 19.1186 hours
 
+# without lag selection
+system.time(
+    for (v in 1:1000) { # v = 5
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        # p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, type = "const", exogen = exo)
+        # p_opt <- p_opt$selection["AIC(n)"]
+        mod_var <- VAR(Dwide[, .SD, .SDcols = c(i, j)], p = 10, type = "const", exogen = exo)
+        M[i, j] <- causality(mod_var, cause = Cells[i])$Granger$p.value
+        M[j, i] <- causality(mod_var, cause = Cells[j])$Granger$p.value
+    }
+)
+19.11 * nrow(M_low) / 1000 / 3600 # 30 hours for p = 10
+36.65 * nrow(M_low) / 1000 / 3600 # 58 hours for p = 30
+
+
 ## foreach ----
+
 library(foreach)
 library(doParallel)
 # Create cluster
@@ -98,18 +117,19 @@ system.time(
         # library(vars)
         i <- M_low[v, 1]
         j <- M_low[v, 2]
-        p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 10, type = "const", exogen = exo)
+        p_opt <- VARselect(Dwide[, .SD, .SDcols = c(i, j)], lag.max = 30, type = "const", exogen = exo)
         p_opt <- p_opt$selection["AIC(n)"]
         mod_var <- VAR(Dwide[, .SD, .SDcols = c(i, j)], p = p_opt, type = "const", exogen = exo)
         c(causality(mod_var, cause = Cells[i])$Granger$p.value,
           causality(mod_var, cause = Cells[j])$Granger$p.value)
     }
 )
-5.15 * nrow(M_low) / 1000 / 3600 # 8.198235 hours
+9.94 * nrow(M_low) / 1000 / 3600 # 15.82 hours
 stopCluster(cl)
 
 
 ## parSapply ----
+
 library(parallel)
 # Create cluster
 cl <- parallel::makeCluster(parallel::detectCores())
@@ -130,11 +150,77 @@ system.time(
           causality(mod_var, cause = Cells[j])$Granger$p.value)
     })
 )
-2.61 * nrow(M_low) / 1000 / 3600 # 4.154834 hours
+7.07 * nrow(M_low) / 1000 / 3600 # 11.25 hours
 stopCluster(cl)
 M3 <- matrix(runif(2*nrow(M_low)), nrow = 2)
 
+# without data.table
+Dwide_mat <- as.matrix(Dwide)
+parallel::clusterExport(cl,
+                        varlist = c("Dwide_mat", "M_low", "exo", "Cells"),
+                        envir = environment())
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        # library(data.table)
+        library(vars)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        p_opt <- VARselect(Dwide_mat[, c(i, j)], lag.max = 30, type = "const", exogen = exo)
+        p_opt <- p_opt$selection["AIC(n)"]
+        mod_var <- VAR(Dwide_mat[, c(i, j)], p = p_opt, type = "const", exogen = exo)
+        c(causality(mod_var, cause = Cells[i])$Granger$p.value,
+          causality(mod_var, cause = Cells[j])$Granger$p.value)
+    })
+)
+6.56 * nrow(M_low) / 1000 / 3600 # 10.44 hours
+stopCluster(cl)
 
+# without data.table and exo
+cl <- parallel::makeCluster(parallel::detectCores())
+Dwide_mat <- as.matrix(Dwide)
+parallel::clusterExport(cl,
+                        varlist = c("Dwide_mat", "M_low", "exo", "Cells"),
+                        envir = environment())
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        # library(data.table)
+        library(vars)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        p_opt <- VARselect(Dwide_mat[, c(i, j)], lag.max = 30, type = "const")
+        p_opt <- p_opt$selection["AIC(n)"]
+        mod_var <- VAR(Dwide_mat[, c(i, j)], p = p_opt, type = "const")
+        c(causality(mod_var, cause = Cells[i])$Granger$p.value,
+          causality(mod_var, cause = Cells[j])$Granger$p.value)
+    })
+)
+6.31 * nrow(M_low) / 1000 / 3600 # 10.04 hours
+stopCluster(cl)
+
+# without data.table and exo and lag selection
+cl <- parallel::makeCluster(parallel::detectCores())
+Dwide_mat <- as.matrix(Dwide)
+parallel::clusterExport(cl,
+                        varlist = c("Dwide_mat", "M_low", "Cells"),
+                        envir = environment())
+system.time(
+    M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
+        # library(data.table)
+        library(vars)
+        i <- M_low[v, 1]
+        j <- M_low[v, 2]
+        # p_opt <- VARselect(Dwide_mat[, c(i, j)], lag.max = 30, type = "const")
+        # p_opt <- p_opt$selection["AIC(n)"]
+        mod_var <- VAR(Dwide_mat[, c(i, j)], p = 30, type = "const")
+        c(causality(mod_var, cause = Cells[i])$Granger$p.value,
+          causality(mod_var, cause = Cells[j])$Granger$p.value)
+    })
+)
+8.89 * nrow(M_low) / 1000 / 3600 # 14.15 hours
+stopCluster(cl)
+
+
+# lmtest
 system.time(
     M3 <- parallel::parSapply(cl, 1:1000, FUN = function(v) {
         library(data.table)
