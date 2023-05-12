@@ -12,9 +12,29 @@ lagmax = 30L
 
 
 # Data ----
+rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
+    filter(FSM == 1) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    )
+AtlanticCells <- rca_cells %>%
+    filter(Atlantic) %>%
+    pull(CellID)
+if (FALSE) {
+    library(ggplot2)
+    library(plotly)
+    p <- ggplot(rca_cells, aes(x = LON, y = LAT, color = Atlantic)) +
+        geom_point()
+    ggplotly(p)
+}
+
 D <- data.table::fread(paste0("./data_rca/rca_ts_", year, "_2.csv"),
                        select = c("DOAVEG_avg", "CellID", "Date")) %>%
-    mutate(CellID = paste0("x", CellID))
+    mutate(CellID = paste0("x", CellID)) %>%
+    filter(!is.element(CellID, AtlanticCells))
 # head(D)
 Dwide <- data.table::dcast(D, Date ~ CellID, value.var = "DOAVEG_avg")
 Dwide_mat <- as.matrix(Dwide[, -1])
@@ -29,15 +49,27 @@ EXO <- Dwide[, 1] %>%
            cos2 = cos(2 * pi * day_year/365.25)) %>%
     dplyr::select(sin2, cos2) %>%
     as.matrix()
+# x = Dwide_mat[, 3000]; plot.ts(x)
 Dwide_mat_deseas <- apply(Dwide_mat, 2, function(x) {
     m0 = lm(x ~ EXO)
+    x0 = residuals(m0)
+    # Replace outliers with interpolated values.
+    iqr = IQR(x0)
+    isoutlier = abs(x0) > 5 * iqr
+    if (sum(isoutlier) > 0) {
+        # print(sum(isoutlier))
+        x[isoutlier] = NA
+        x = zoo::na.spline(x)
+        m0 = lm(x ~ EXO)
+    }
     residuals(m0)
+    # plot.ts(residuals(m0))
 })
 saveRDS(Dwide_mat_deseas,
         file = paste0("./dataderived/Dwide_mat_deseas_", year, ".rds"))
 # dim(Dwide_mat_deseas)
-# plot.ts(Dwide_mat_deseas[, 500])
-rm(D, Dwide, Dwide_mat, EXO)
+# plot.ts(Dwide_mat_deseas[, 3300])
+rm(D, Dwide, Dwide_mat, EXO, AtlanticCells, isoutlier)
 
 # Pairwise testing ----
 set.seed(123456789)
