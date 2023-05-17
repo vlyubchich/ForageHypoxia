@@ -179,5 +179,80 @@ squeue -u lyubchich
 # 3. Embedding ----
 
 rm(list = ls())
-library(data.table)
+# library(data.table)
 library(dplyr)
+library(igraph)
+source("code/fun_create_adj.R")
+
+
+YEARS = 1986L:2015L
+alpha = 0.05
+
+edims <- numeric()
+for (year in YEARS) { # year = 2002
+
+    # Load data obtained on cluster
+    Mcoef <- readRDS(paste0("dataderived/CAUSpairs_", year, ".rds"))
+    proc <- create_adj_pairs(Mcoef)
+
+    # Thresholding / adjusting
+    # proc$Acoef[proc$Acoef < 0.01] <- 0
+    proc$Gp <- apply(proc$Gp, 2, p.adjust, method = "BY")
+    diag(proc$Gp) <- 1
+
+    # Unweighted directed adjacency matrix
+    AM <- proc$Gp < alpha
+
+    # Weighted directed adjacency matrix
+    AMw <- proc$Acoef
+    AMw[AM == 0] <- 0
+
+    # Create graph, add attributes
+    graphGranger <- igraph::graph_from_adjacency_matrix(AMw, weighted = TRUE
+                                                        #AM, weighted = NULL
+                                                        ,mode = "directed"
+                                                        ,diag = FALSE)
+    # igraph::is_weighted(graphGranger)
+
+    # Embed
+    # https://bdpedigo.github.io/networks-course/embedding.html#spectral-methods
+    E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
+    edims <- c(edims, igraph::dim_select(E1$D))
+    print(c(year, igraph::dim_select(E1$D)))
+    if (FALSE) {
+        plot.ts(E1$D)
+        plot(E1$X[, 1], E1$Y[, 1])
+        plot(E1$X[, 2], E1$Y[, 2])
+
+        plot(E1$X[, 1], E1$X[, 2])
+        plot(E1$Y[, 1], E1$Y[, 2])
+
+        plot(E1$X[, 3], E1$Y[, 3])
+    }
+
+}
+
+
+# After running
+# E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
+# i.e., up to 50 dimensions, see the summary
+summary(edims)
+# For weighted graphs (AMw, graph_from_adjacency_matrix):
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+# 2.0     4.0     4.0     4.2     5.0     7.0
+# For unweighted graphs (AM, graph_from_adjacency_matrix):
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+# 1.000   1.250   2.000   2.067   2.750   4.000
+# In most cases, 5 dimensions is enough, so change the above code
+# to 5 dims and concatenate results.
+
+
+
+library(node2vec)
+E2 <- node2vecR(as_edgelist(graphGranger), dim = 5,
+                walk_length = 3,
+                directed = TRUE)
+
+
+
+
