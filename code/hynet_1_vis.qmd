@@ -58,7 +58,13 @@ shoreline <- maptools::readShapePoly("../CBnet_shoreline/final_shoreline.shp")
 shoreline <- maptools::readShapePoly("../CBnet_shoreline/CBnet_Shoreline_simplify.shp")
 rca_cells <- data.table::fread("../data_rca/rca_cells_2.csv") %>%
     filter(FSM == 1) %>%
-    mutate(CellID = paste0("x", CellID))
+    mutate(CellID = paste0("x", CellID)) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    ) %>% 
+    filter(!Atlantic)
 #Use info from the shape file to find projections for the stations
 ###http://www.prj2epsg.org/search
 ###26918 - NAD_1983_UTM_Zone_18N
@@ -137,6 +143,9 @@ summary(as.vector(tmp_BY[!is.na(tmp_BY)]))
 
 proc2002$Gp <- tmp_BY #apply(proc2002$Gp, 2, p.adjust, method = "BY")
 proc2011$Gp <- apply(proc2011$Gp, 2, p.adjust, method = "BY")
+
+# Fill in the diagonal for easier assignment of the edge attributes
+diag(proc2002$Gp) <- diag(proc2011$Gp) <- 1
 ```
 
 Create weighted directed networks, where edge weight is the average weighted coefficient.
@@ -175,7 +184,10 @@ g2002 <- igraph::graph_from_adjacency_matrix(proc2002$Acoef[ss, ss]
 g2002G <- igraph::graph_from_adjacency_matrix(proc2002$Gp[ss, ss] < alpha
                                              ,weighted = NULL
                                              ,mode = "directed"
-                                             ,diag = FALSE)
+                                             ,diag = FALSE) %>% 
+    set_edge_attr("Coef", value = proc2002$Acoef[ss, ss][proc2002$Gp[ss, ss] < alpha]) %>% 
+    set_edge_attr("Lag", value = proc2002$Alag[ss, ss][proc2002$Gp[ss, ss] < alpha])
+
 # - based on penalized pairwise VAR coefficients
 g2011 <- igraph::graph_from_adjacency_matrix(proc2011$Acoef[ss, ss]
                                              ,weighted = TRUE
@@ -185,7 +197,9 @@ g2011 <- igraph::graph_from_adjacency_matrix(proc2011$Acoef[ss, ss]
 g2011G <- igraph::graph_from_adjacency_matrix(proc2011$Gp[ss, ss] < alpha
                                              ,weighted = NULL
                                              ,mode = "directed"
-                                             ,diag = FALSE)
+                                             ,diag = FALSE) %>% 
+    set_edge_attr("Coef", value = proc2011$Acoef[ss, ss][proc2011$Gp[ss, ss] < alpha]) %>% 
+    set_edge_attr("Lag", value = proc2011$Alag[ss, ss][proc2011$Gp[ss, ss] < alpha])
 
 # Network stats
 D <- rca_cells[ss, ] %>%

@@ -1,6 +1,158 @@
+# Hypoxia network for each 1 year
+
+
+# 1. Pairwise tests ----
+
+## Example 1986 ----
+# This subsection is an example file "hynet_1pair_1986.R"
+# to be run on cluster (total 30 files, for 1986--2015)
+
 # Hypoxia network for 1 year
 
-# CBL cluster ----
+# Packages ---
+rm(list = ls())
+library(data.table)
+library(dplyr)
+library(BigVAR)
+library(parallel)
+
+year = 1986
+lagmax = 30L
+
+
+# Data ---
+rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
+    filter(FSM == 1) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    )
+AtlanticCells <- rca_cells %>%
+    filter(Atlantic) %>%
+    pull(CellID)
+if (FALSE) {
+    library(ggplot2)
+    library(plotly)
+    p <- ggplot(rca_cells, aes(x = LON, y = LAT, color = Atlantic)) +
+        geom_point()
+    ggplotly(p)
+}
+
+D <- data.table::fread(paste0("./data_rca/rca_ts_", year, "_2.csv"),
+                       select = c("DOAVEG_avg", "CellID", "Date")) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    filter(!is.element(CellID, AtlanticCells))
+# head(D)
+Dwide <- data.table::dcast(D, Date ~ CellID, value.var = "DOAVEG_avg")
+Dwide_mat <- as.matrix(Dwide[, -1])
+Cells <- colnames(Dwide_mat)
+# dim(Dwide_mat)
+
+
+# Remove seasonality ---
+EXO <- Dwide[, 1] %>%
+    mutate(day_year = as.numeric(format(Date, "%j"))) %>%
+    mutate(sin2 = sin(2 * pi * day_year/365.25),
+           cos2 = cos(2 * pi * day_year/365.25)) %>%
+    dplyr::select(sin2, cos2) %>%
+    as.matrix()
+# x = Dwide_mat[, 3000]; plot.ts(x)
+Dwide_mat_deseas <- apply(Dwide_mat, 2, function(x) {
+    m0 = lm(x ~ EXO)
+    x0 = residuals(m0)
+    # Replace outliers with interpolated values.
+    iqr = IQR(x0)
+    isoutlier = abs(x0) > 5 * iqr
+    if (sum(isoutlier) > 0) {
+        # print(sum(isoutlier))
+        x[isoutlier] = NA
+        x = zoo::na.spline(x)
+        m0 = lm(x ~ EXO)
+    }
+    residuals(m0)
+    # plot.ts(residuals(m0))
+})
+saveRDS(Dwide_mat_deseas,
+        file = paste0("./dataderived/Dwide_mat_deseas_", year, ".rds"))
+# dim(Dwide_mat_deseas)
+# plot.ts(Dwide_mat_deseas[, 3300])
+rm(D, Dwide, Dwide_mat, EXO, AtlanticCells, isoutlier)
+
+# Pairwise testing ---
+set.seed(123456789)
+
+# Create cluster
+cl <- parallel::makeCluster(parallel::detectCores())
+print(cl)
+parallel::clusterExport(cl,
+                        varlist = c("Dwide_mat_deseas", "lagmax", "Cells"),
+                        envir = environment())
+
+# Run over the upper triangle # i = 1; j = 2
+M3 <- parallel::parLapply(cl, 1:(ncol(Dwide_mat_deseas) - 1), fun = function(i) {
+    library(vars)
+    Js <- (i + 1):ncol(Dwide_mat_deseas)
+    Alag_ij <- Alag_ji <- Acoef_ij <- Acoef_ji <- Gp_ij <- Gp_ji <- numeric(length(Js))
+    for (j in Js) {
+        ## Model, remove intercept estimate
+        mod <- BigVAR::BigVAR.fit(Dwide_mat_deseas[,c(i, j)],
+                                  p = lagmax,
+                                  struct = "Basic",
+                                  lambda = 8,
+                                  intercept = TRUE)[,-1,1]
+        ## Lagged coeffs of the i-th variable affecting the j-th variable
+        ind <- 1:lagmax
+        x <- abs(mod[2, ind])
+        ## Check if not zero, then update
+        if (any(x != 0)) {
+            phat <- max(which(x != 0))
+            # Alag[i, j] <- phat
+            # For parallel version
+            Alag_ij[j - i] <- phat
+            # Remove last 0s
+            x <- x[1:phat]
+            # Weighted average, inverse proportional to the lag
+            # Acoef[i, j] <- sum(x / 1:phat) / sum(1 / 1:phat)
+            # For parallel version
+            Acoef_ij[j - i] <- sum(x / 1:phat) / sum(1 / 1:phat)
+        }
+        ## Lagged coeffs of the j-th variable affecting the i-th variable
+        x <- abs(mod[1, ind + lagmax])
+        # Check if not zero, then update
+        if (any(x != 0)) {
+            phat <- max(which(x != 0))
+            # Alag[j, i] <- phat
+            # For parallel version
+            Alag_ji[j - i] <- phat
+            # Remove last 0s
+            x <- x[1:phat]
+            # Weighted average, inverse proportional to the lag
+            # Acoef[j, i] <- sum(x / 1:phat) / sum(1 / 1:phat)
+            # For parallel version
+            Acoef_ji[j - i] <- sum(x / 1:phat) / sum(1 / 1:phat)
+        }
+        mod_var <- VAR(Dwide_mat_deseas[, c(i, j)],
+                       p = max(c(1, Alag_ij[j - i], Alag_ji[j - i])),
+                       type = "const")
+        Gp_ij[j - i] <- causality(mod_var, cause = Cells[i])$Granger$p.value
+        Gp_ji[j - i] <- causality(mod_var, cause = Cells[j])$Granger$p.value
+    }
+    list(i = i, Js = Js,
+         Alag_ij = Alag_ij, Acoef_ij = Acoef_ij,
+         Gp_ij = Gp_ij,
+         Alag_ji = Alag_ji, Acoef_ji = Acoef_ji,
+         Gp_ji = Gp_ji)
+
+})
+saveRDS(M3,
+        file = paste0("./dataderived/CAUSpairs_", year, ".rds"))
+
+
+## CBL cluster ----
+# Use the code below to prepare cluster and run jobs
+
 # In Putty, run
 R --vanilla
 install.packages("data.table")
@@ -10,103 +162,22 @@ install.packages("zoo")
 install.packages("vars")
 # BigVAR deps
 install.packages("abind")
-
 # devtools::install_github("vlyubchich/funtimes")
 q()
 
 cd /local/users/lyubchich/hynet
-# srun -l R CMD BATCH "--vanilla" test_parallel.R # prints 32 cores
-# sbatch --nodes=2 --mem=0 --time=5-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1.R
-sbatch --nodes=2 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1_2002.R
-sbatch --nodes=1 --mem=0 --time=7-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2011.R
 sbatch --nodes=1 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1986.R
-sbatch --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1991.R
-sbatch -w statcluster-n0 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_1994.R
-# up to 2005
-sbatch -w statcluster-n0 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2001.R
+# To force node-0
+sbatch -w statcluster-n0 --mem=0 --time=1-23 R CMD BATCH "--vanilla --no-save --no-restore" ./hynet_1pair_2015.R
 squeue -u lyubchich
 # scancel -u lyubchich
 
 
-# Packages ----
+# 2. Visuals ----
+# See "hynet_1_vis.qmd" with visualizations for 2002 and 2011.
+
+# 3. Embedding ----
+
 rm(list = ls())
 library(data.table)
 library(dplyr)
-library(BigVAR)
-
-
-# Data ----
-
-# rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
-#     filter(FSM == 1) %>%
-#     mutate(CellID = paste0("x", CellID))
-D <- data.table::fread("./data_rca/rca_ts_2011_2.csv",
-                       select = c("DOAVEG_avg", "CellID", "Date")) %>%
-    mutate(CellID = paste0("x", CellID))
-# head(D)
-Dwide <- data.table::dcast(D, Date ~ CellID, value.var = "DOAVEG_avg")
-Dwide_mat <- as.matrix(Dwide[, -1])
-
-
-# VAR ----
-set.seed(123456789)
-mod1 <- constructModel(Dwide_mat[,c(1, 100, 200)*10],
-                       p = 30,
-                       struct = "Basic",
-                       gran = c(5000, 50),
-                       h = 1,
-                       cv = "Rolling",
-                       verbose = FALSE,
-                       IC = TRUE,
-                       model.controls = list(intercept = TRUE))
-# mod1
-results <- cv.BigVAR(mod1)
-# results
-plot(results)
-# extract optimal lambda by running the above code with *1, *2,..., *5, *10
-results@OptimalLambda
-# [1] 1.583282 1.896021 1.935361 2.254627 6.748183 10.38759
-
-# Use fixed lambda to save time
-mod2 <- constructModel(Dwide_mat[,c(1, 100, 200)*10],
-                       p = 30,
-                       struct = "Basic",
-                       ownlambdas = TRUE,
-                       gran = c(1, 2, 4, 8, 16),
-                       h = 1,
-                       cv = "Rolling",
-                       verbose = FALSE,
-                       IC = TRUE,
-                       model.controls = list(intercept = TRUE))
-results <- cv.BigVAR(mod2)
-plot(results)
-SparsityPlot.BigVAR.results(results)
-M <- as.matrix(coef(results)[, -1])
-print(results@OptimalLambda)
-saveRDS(M, file = "./dataderived/BigVAR_2011_coef_test.rds")
-
-# Without running cross-validation, with fixed lambda
-mod3 <- BigVAR.fit(Dwide_mat[,c(1, 100, 200)*10],
-                   p = 30,
-                   struct = "Basic",
-                   lambda = 2,
-                   intercept = TRUE)
-
-
-# Load VAR ----
-
-## Load and extract coefficients ----
-if (FALSE) {
-    gc()
-    library(BigVAR)
-    library(lattice)
-    M <- readRDS("dataderived/BigVAR_2002.rds")
-    # plot(M)
-    lagmax <- M@lagmax
-    # VAR coefficients, without intercepts
-    Mcoef <- as.matrix(coef(M)[, -1])
-    # Mcoef[1:9, 1:7]
-    saveRDS(Mcoef, file = paste0("./dataderived/BigVAR_2002_coef_lagmax",
-                                 lagmax, ".rds"))
-}
-
