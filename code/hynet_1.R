@@ -179,7 +179,7 @@ squeue -u lyubchich
 
 # 3. Embedding ----
 
-## Adjacency Spectral Embedding (ASM) ----
+## Adjacency Spectral Embedding (ASE) ----
 
 rm(list = ls())
 # library(data.table)
@@ -202,7 +202,7 @@ alpha = 0.05
 ndims = 5
 
 edims <- numeric()
-E_ASM <- numeric()
+E_ASE <- numeric()
 # Full loop on weighted net is about 3 minutes.
 for (year in YEARS) { # year = 2002
 
@@ -244,14 +244,14 @@ for (year in YEARS) { # year = 2002
 
         plot(E1$X[, 3], E1$Y[, 3])
     }
-    E_ASM <- rbind(E_ASM, cbind(rca_cells$CellID, year, E1$X, E1$Y))
+    E_ASE <- rbind(E_ASE, cbind(rca_cells$CellID, year, E1$X, E1$Y))
 }
-colnames(E_ASM) <- c("CellID", "Year",
-                     paste0("ASM_X", 1:ndims),
-                     paste0("ASM_Y", 1:ndims)
+colnames(E_ASE) <- c("CellID", "Year",
+                     paste0("ASE_X", 1:ndims),
+                     paste0("ASE_Y", 1:ndims)
 )
-write.csv(E_ASM,
-          file = "dataderived/embedding_ASM.csv",
+write.csv(E_ASE,
+          file = "dataderived/embedding_ASE.csv",
           row.names = FALSE)
 
 # After running
