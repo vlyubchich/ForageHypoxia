@@ -176,7 +176,10 @@ squeue -u lyubchich
 # 2. Visuals ----
 # See "hynet_1_vis.qmd" with visualizations for 2002 and 2011.
 
+
 # 3. Embedding ----
+
+## Adjacency Spectral Embedding (ASM) ----
 
 rm(list = ls())
 # library(data.table)
@@ -184,11 +187,23 @@ library(dplyr)
 library(igraph)
 source("code/fun_create_adj.R")
 
+rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
+    filter(FSM == 1) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    ) %>%
+    filter(!Atlantic)
 
 YEARS = 1986L:2015L
 alpha = 0.05
+ndims = 5
 
 edims <- numeric()
+E_ASM <- numeric()
+# Full loop on weighted net is about 3 minutes.
 for (year in YEARS) { # year = 2002
 
     # Load data obtained on cluster
@@ -216,9 +231,9 @@ for (year in YEARS) { # year = 2002
 
     # Embed
     # https://bdpedigo.github.io/networks-course/embedding.html#spectral-methods
-    E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
-    edims <- c(edims, igraph::dim_select(E1$D))
-    print(c(year, igraph::dim_select(E1$D)))
+    E1 <- igraph::embed_adjacency_matrix(graphGranger, no = ndims)
+    # edims <- c(edims, igraph::dim_select(E1$D))
+    # print(c(year, igraph::dim_select(E1$D)))
     if (FALSE) {
         plot.ts(E1$D)
         plot(E1$X[, 1], E1$Y[, 1])
@@ -229,9 +244,15 @@ for (year in YEARS) { # year = 2002
 
         plot(E1$X[, 3], E1$Y[, 3])
     }
-
+    E_ASM <- rbind(E_ASM, cbind(rca_cells$CellID, year, E1$X, E1$Y))
 }
-
+colnames(E_ASM) <- c("CellID", "Year",
+                     paste0("ASM_X", 1:ndims),
+                     paste0("ASM_Y", 1:ndims)
+)
+write.csv(E_ASM,
+          file = "dataderived/embedding_ASM.csv",
+          row.names = FALSE)
 
 # After running
 # E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
@@ -248,10 +269,6 @@ summary(edims)
 
 
 
-library(node2vec)
-E2 <- node2vecR(as_edgelist(graphGranger), dim = 5,
-                walk_length = 3,
-                directed = TRUE)
 
 
 
