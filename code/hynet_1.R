@@ -179,7 +179,7 @@ squeue -u lyubchich
 
 # 3. Embedding ----
 
-## Adjacency Spectral Embedding (ASE) ----
+## Adjacency / Laplacian Spectral Embedding (ASE/LSE) ----
 
 rm(list = ls())
 # library(data.table)
@@ -202,8 +202,8 @@ alpha = 0.05
 ndims = 5
 
 edims <- numeric()
-E_ASE <- numeric()
-# Full loop on weighted net is about 3 minutes.
+E_ASE <- E_LSE <- numeric()
+# Full loop on weighted net is about 5 minutes.
 for (year in YEARS) { # year = 2002
 
     # Load data obtained on cluster
@@ -245,13 +245,22 @@ for (year in YEARS) { # year = 2002
         plot(E1$X[, 3], E1$Y[, 3])
     }
     E_ASE <- rbind(E_ASE, cbind(rca_cells$CellID, year, E1$X, E1$Y))
+    E2 <- igraph::embed_laplacian_matrix(graphGranger, no = ndims, type = "OAP")
+    E_LSE <- rbind(E_LSE, cbind(rca_cells$CellID, year, E2$X, E2$Y))
 }
 colnames(E_ASE) <- c("CellID", "Year",
                      paste0("ASE_X", 1:ndims),
                      paste0("ASE_Y", 1:ndims)
 )
+colnames(E_LSE) <- c("CellID", "Year",
+                     paste0("LSE_X", 1:ndims),
+                     paste0("LSE_Y", 1:ndims)
+)
 write.csv(E_ASE,
           file = "dataderived/embedding_ASE.csv",
+          row.names = FALSE)
+write.csv(E_LSE,
+          file = "dataderived/embedding_LSE.csv",
           row.names = FALSE)
 
 # After running
@@ -268,8 +277,144 @@ summary(edims)
 # to 5 dims and concatenate results.
 
 
+## Manual ----
+# Get (weighted) averages of lagged O2 from cells that influence
+# the cells with benthic data, over 1-ndims neighborhoods.
+
+rm(list = ls())
+# library(data.table)
+library(dplyr)
+library(igraph)
+source("code/fun_create_adj.R")
+
+rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
+    filter(FSM == 1) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    ) %>%
+    filter(!Atlantic)
+
+# Match with benthic biomass data
+sta_cells <- readr::read_csv("data_benthos/stations_cells.csv") %>%
+    mutate(CellID = paste0("x", CellID))
+BB <- readr::read_csv("data_benthos/benthos_biomass.csv") %>%
+    filter(SITE_TYPE == "RANDOM") %>%
+    rename(LAT = LATITUDE,
+           LON = LONGITUDE) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    ) %>%
+    filter(!Atlantic) %>%
+    select(STATION, SAMPLE_DATE, Year)
+BB <- BB %>%
+    left_join(sta_cells, by = c("STATION", "SAMPLE_DATE", "Year")) %>%
+    filter(!is.na(CellID)) %>%
+    group_by(CellID, SAMPLE_DATE) %>%
+    summarise(Year = mean(Year)) %>%
+    ungroup()
+# plot(x = BB$LONGITUDE, y = BB$LATITUDE)
+
+YEARS = 1986L:2015L
+YEARS = YEARS[YEARS >= min(BB$Year) & YEARS <= max(BB$Year)]
+alpha = 0.05
+ndims = 2
+
+edims <- numeric()
+E_MAN <- numeric()
+# Full loop on weighted net is about 5 minutes.
+for (year in YEARS) { # year = 1995
+
+    # Cells numbers 1-nrow(rca_cells) for which to get embeddings,
+    # not CellID but matching the order in the adjacency matrix.
+    bb <- BB %>%
+        filter(Year == year) %>%
+        mutate(Cell = sapply(CellID, function(i) which(i == rca_cells$CellID)))
+
+    # Load data obtained on cluster
+    O2 <- readRDS(paste0("dataderived/Dwide_mat_deseas_", year, ".rds"))
+    Mcoef <- readRDS(paste0("dataderived/CAUSpairs_", year, ".rds"))
+    proc <- create_adj_pairs(Mcoef)
+
+    # Thresholding / adjusting
+    # proc$Acoef[proc$Acoef < 0.01] <- 0
+    proc$Gp <- apply(proc$Gp, 2, p.adjust, method = "BY")
+    diag(proc$Gp) <- 1
+
+    # Unweighted directed adjacency matrix
+    AM <- proc$Gp < alpha
+
+    # Weighted directed adjacency matrix
+    AMw <- proc$Acoef
+    AMw[AM == 0] <- 0
+
+    # Lags of dependence
+    Alag <- proc$Alag
+    Alag[AM == 0] <- 0
+
+    # In-degrees
+    INDegrees <- apply(Alag, 2, function(x) sum(x > 0))
+
+    # Get neighborhood information
+    sapply(1:nrow(bb), function(x) { # x = w = 1
+        seed <- bb$Cell[x]
+        seed_date <- bb$SAMPLE_DATE[x]
+        seed_day <- as.numeric(format(seed_date, "%j"))
+        # Select in-waves
+        waves <- as.list(rep(NA, ndims + 1))
+        waves[[1]] <- data.frame(ids = seed, lags = NA, degrees = INDegrees[x])
+        for (w in 1:ndims) {
+            # Select influencers of waves[[w]]
+            ids <- unlist(lapply(waves[[w]]$ids, function(nd) which(Alag[, nd] > 0)))
+            lags <- unlist(lapply(waves[[w]]$ids, function(nd) Alag[which(Alag[, nd] > 0), nd]))
+            D <- data.frame(ids = ids,
+                            lags = lags,
+                            degees = INDegrees[ids])
+            # Get averages
+            D$o2 <- sapply(1:nrow(D), function(rd) {
+                mean(O2[, D$ids[rd]])
+            })
 
 
+            waves[[w + 1]] <- D
+        }
+
+    })
+
+
+    E_LSE <- rbind(E_LSE, cbind(rca_cells$CellID, year, E2$X, E2$Y))
+}
+
+
+
+
+
+
+
+
+colnames(E_ASE) <- c("CellID", "Year",
+                     paste0("ASE_X", 1:ndims),
+                     paste0("ASE_Y", 1:ndims)
+)
+colnames(E_LSE) <- c("CellID", "Year",
+                     paste0("LSE_X", 1:ndims),
+                     paste0("LSE_Y", 1:ndims)
+)
+write.csv(E_ASE,
+          file = "dataderived/embedding_ASE.csv",
+          row.names = FALSE)
+write.csv(E_LSE,
+          file = "dataderived/embedding_LSE.csv",
+          row.names = FALSE)
+
+# After running
+# E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
+# i.e., up to 50 dimensions, see the summary
+summary(edims)
 
 
 
