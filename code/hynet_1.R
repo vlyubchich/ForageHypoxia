@@ -286,6 +286,7 @@ rm(list = ls())
 library(dplyr)
 library(igraph)
 source("code/fun_create_adj.R")
+# source("code/fun_influencers.R")
 
 rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
     filter(FSM == 1) %>%
@@ -324,9 +325,7 @@ YEARS = YEARS[YEARS >= min(BB$Year) & YEARS <= max(BB$Year)]
 alpha = 0.05
 ndims = 2
 
-edims <- numeric()
-E_MAN <- numeric()
-# Full loop on weighted net is about 5 minutes.
+EMB <- data.frame()
 for (year in YEARS) { # year = 1995
 
     # Cells numbers 1-nrow(rca_cells) for which to get embeddings,
@@ -334,6 +333,9 @@ for (year in YEARS) { # year = 1995
     bb <- BB %>%
         filter(Year == year) %>%
         mutate(Cell = sapply(CellID, function(i) which(i == rca_cells$CellID)))
+    # Add columns to hold embeddings
+    E_MAN <- matrix(NA, nrow = nrow(bb), ncol = ndims)
+    colnames(E_MAN) = paste0("Emb", 1:ndims)
 
     # Load data obtained on cluster
     O2 <- readRDS(paste0("dataderived/Dwide_mat_deseas_", year, ".rds"))
@@ -356,65 +358,50 @@ for (year in YEARS) { # year = 1995
     Alag <- proc$Alag
     Alag[AM == 0] <- 0
 
-    # In-degrees
+    # # In-degrees
     INDegrees <- apply(Alag, 2, function(x) sum(x > 0))
 
     # Get neighborhood information
-    sapply(1:nrow(bb), function(x) { # x = w = 1
+    for (x in 1:nrow(bb)) { # x = w = 1
+        print(c(year, x))
         seed <- bb$Cell[x]
         seed_date <- bb$SAMPLE_DATE[x]
         seed_day <- as.numeric(format(seed_date, "%j"))
         # Select in-waves
         waves <- as.list(rep(NA, ndims + 1))
-        waves[[1]] <- data.frame(ids = seed, lags = NA, degrees = INDegrees[x])
-        for (w in 1:ndims) {
-            # Select influencers of waves[[w]]
-            ids <- unlist(lapply(waves[[w]]$ids, function(nd) which(Alag[, nd] > 0)))
-            lags <- unlist(lapply(waves[[w]]$ids, function(nd) Alag[which(Alag[, nd] > 0), nd]))
-            D <- data.frame(ids = ids,
-                            lags = lags,
-                            degees = INDegrees[ids])
-            # Get averages
-            D$o2 <- sapply(1:nrow(D), function(rd) {
-                mean(O2[, D$ids[rd]])
-            })
-
-
-            waves[[w + 1]] <- D
+        waves[[1]] <- data.frame(ids_from = seed, ids_to = seed, lags = 0, degrees = INDegrees[seed])
+        if (waves[[1]]$degrees == 0) {
+            E_MAN[x, 1:ndims] <- 0
+        } else {
+            for (w in 1:ndims) {
+                # Select influencers of waves[[w]]
+                ids_from <- unlist(lapply(waves[[w]]$ids_from, function(nd) which(Alag[, nd] > 0)))
+                lags <- unlist(lapply(waves[[w]]$ids_from, function(nd) Alag[which(Alag[, nd] > 0), nd]))
+                ARweights <- unlist(lapply(waves[[w]]$ids_from, function(nd) AMw[which(Alag[, nd] > 0), nd]))
+                D <- data.frame(ids_from = ids_from,
+                                ids_to = rep(waves[[w]]$ids_from, times = waves[[w]]$degrees),
+                                lags = lags + rep(waves[[w]]$lags, times = waves[[w]]$degrees),
+                                ARweights = ARweights,
+                                degrees = INDegrees[ids_from])
+                # Get averages
+                D$o2 <- sapply(1:nrow(D), function(rd) {
+                    mean(O2[(seed_day - D$lags[rd]):seed_day, D$ids_from[rd]])
+                })
+                # Average oxygen
+                E_MAN[x, w] <- sum(D$o2 * D$ARweights) / sum(D$ARweights)
+                waves[[w + 1]] <- D
+            }
         }
 
-    })
-
-
-    E_LSE <- rbind(E_LSE, cbind(rca_cells$CellID, year, E2$X, E2$Y))
+    }
+    bb <- bb %>%
+        bind_cols(E_MAN)
+    EMB <- bind_rows(EMB, bb)
 }
-
-
-
-
-
-
-
-
-colnames(E_ASE) <- c("CellID", "Year",
-                     paste0("ASE_X", 1:ndims),
-                     paste0("ASE_Y", 1:ndims)
-)
-colnames(E_LSE) <- c("CellID", "Year",
-                     paste0("LSE_X", 1:ndims),
-                     paste0("LSE_Y", 1:ndims)
-)
-write.csv(E_ASE,
-          file = "dataderived/embedding_ASE.csv",
+write.csv(EMB,
+          file = "dataderived/embedding_Manual.csv",
           row.names = FALSE)
-write.csv(E_LSE,
-          file = "dataderived/embedding_LSE.csv",
-          row.names = FALSE)
-
-# After running
-# E1 <- igraph::embed_adjacency_matrix(graphGranger, no = 50)
-# i.e., up to 50 dimensions, see the summary
-summary(edims)
+summary(EMB)
 
 
 
