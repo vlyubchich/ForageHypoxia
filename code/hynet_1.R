@@ -295,7 +295,11 @@ rca_cells <- data.table::fread("./data_rca/rca_cells_2.csv") %>%
                (LAT < 37.5 & LON > -75.8) |
                (LAT < 38.0 & LON > -75.6) |
                (LAT < 36.96 & LON > -75.99)
-    ) %>%
+    )
+AtlanticCells <- rca_cells %>%
+    filter(Atlantic) %>%
+    pull(CellID)
+rca_cells <- rca_cells %>%
     filter(!Atlantic)
 
 # Match with benthic biomass data
@@ -305,20 +309,14 @@ BB <- readr::read_csv("data_benthos/benthos_biomass.csv") %>%
     filter(SITE_TYPE == "RANDOM") %>%
     rename(LAT = LATITUDE,
            LON = LONGITUDE) %>%
-    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
-               (LAT < 37.5 & LON > -75.8) |
-               (LAT < 38.0 & LON > -75.6) |
-               (LAT < 36.96 & LON > -75.99)
-    ) %>%
-    filter(!Atlantic) %>%
-    select(STATION, SAMPLE_DATE, Year)
-BB <- BB %>%
+    select(STATION, SAMPLE_DATE, Year) %>%
     left_join(sta_cells, by = c("STATION", "SAMPLE_DATE", "Year")) %>%
     filter(!is.na(CellID)) %>%
+    filter(!is.element(CellID, AtlanticCells)) %>%
     group_by(CellID, SAMPLE_DATE) %>%
     summarise(Year = mean(Year)) %>%
     ungroup()
-# plot(x = BB$LONGITUDE, y = BB$LATITUDE)
+# plot(x = BB$LON, y = BB$LAT)
 
 YEARS = 1986L:2015L
 YEARS = YEARS[YEARS >= min(BB$Year) & YEARS <= max(BB$Year)]
@@ -364,7 +362,7 @@ for (year in YEARS) { # year = 1995
     # Get neighborhood information
     for (x in 1:nrow(bb)) { # x = w = 1
         print(c(year, x))
-        seed <- bb$Cell[x]
+        seed <- unlist(bb$Cell)[x]
         seed_date <- bb$SAMPLE_DATE[x]
         seed_day <- as.numeric(format(seed_date, "%j"))
         # Select in-waves
@@ -374,25 +372,28 @@ for (year in YEARS) { # year = 1995
             E_MAN[x, 1:ndims] <- 0
         } else {
             for (w in 1:ndims) {
-                # Select influencers of waves[[w]]
-                ids_from <- unlist(lapply(waves[[w]]$ids_from, function(nd) which(Alag[, nd] > 0)))
-                lags <- unlist(lapply(waves[[w]]$ids_from, function(nd) Alag[which(Alag[, nd] > 0), nd]))
-                ARweights <- unlist(lapply(waves[[w]]$ids_from, function(nd) AMw[which(Alag[, nd] > 0), nd]))
-                D <- data.frame(ids_from = ids_from,
-                                ids_to = rep(waves[[w]]$ids_from, times = waves[[w]]$degrees),
-                                lags = lags + rep(waves[[w]]$lags, times = waves[[w]]$degrees),
-                                ARweights = ARweights,
-                                degrees = INDegrees[ids_from])
-                # Get averages
-                D$o2 <- sapply(1:nrow(D), function(rd) {
-                    mean(O2[(seed_day - D$lags[rd]):seed_day, D$ids_from[rd]])
-                })
-                # Average oxygen
-                E_MAN[x, w] <- sum(D$o2 * D$ARweights) / sum(D$ARweights)
-                waves[[w + 1]] <- D
+                if (all(waves[[w]]$degrees == 0)) {
+                    E_MAN[x, w] <- 0
+                } else {
+                    # Select influencers of waves[[w]]
+                    ids_from <- unlist(lapply(waves[[w]]$ids_from, function(nd) which(Alag[, nd] > 0)))
+                    lags <- unlist(lapply(waves[[w]]$ids_from, function(nd) Alag[which(Alag[, nd] > 0), nd]))
+                    ARweights <- unlist(lapply(waves[[w]]$ids_from, function(nd) AMw[which(Alag[, nd] > 0), nd]))
+                    D <- data.frame(ids_from = ids_from,
+                                    ids_to = rep(waves[[w]]$ids_from, times = waves[[w]]$degrees),
+                                    lags = lags + rep(waves[[w]]$lags, times = waves[[w]]$degrees),
+                                    ARweights = ARweights,
+                                    degrees = INDegrees[ids_from])
+                    # Get averages
+                    D$o2 <- sapply(1:nrow(D), function(rd) {
+                        mean(O2[(seed_day - D$lags[rd]):seed_day, D$ids_from[rd]])
+                    })
+                    # Average oxygen
+                    E_MAN[x, w] <- sum(D$o2 * D$ARweights) / sum(D$ARweights)
+                    waves[[w + 1]] <- D
+                }
             }
         }
-
     }
     bb <- bb %>%
         bind_cols(E_MAN)
