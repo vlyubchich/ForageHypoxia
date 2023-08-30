@@ -137,7 +137,8 @@ ha_s <- HA %>%
 # Combine annual summaries
 hlist <- list(hv_y, hv_s, ha_y, ha_s)
 H <- hlist %>%
-    purrr::reduce(full_join, by = "Year")
+    purrr::reduce(full_join, by = "Year") %>%
+    filter(Year %in% YEARS)
 
 # Combine with network stats
 D <- full_join(N, H, by = "Year")
@@ -157,7 +158,6 @@ dev.off()
 
 png("images/hynet1_mat.png", width = 15, height = 15, units = "in", res = 300)
 D %>%
-    filter(Year > 1986) %>%
     select(-Year) %>%
     GGally::ggpairs()
 dev.off()
