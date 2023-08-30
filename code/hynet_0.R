@@ -61,8 +61,8 @@ M <- matrix(data = NA,
             ncol = length(Cells),
             dimnames = list(Cells, Cells))
 M_low <- which(lower.tri(M), arr.ind = TRUE)
-# 2do Create a matrix with selected AR(p) for p.
-# 2do Try larger lags to justify lower limit.
+# 2do+ Create a matrix with selected AR(p) for p.
+# 2do+ Try larger lags to justify lower limit.
 
 
 ## sequential ----
