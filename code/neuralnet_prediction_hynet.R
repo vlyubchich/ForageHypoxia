@@ -7,6 +7,7 @@ set.seed(42)
 ## Primary working directory ----
 # pwd <- "/Users/ryan/Windows/Documents/Post UCB/Research/MD Sea Grant/Grant_2/ForageHypoxia"
 pwd <- "/home/ryan/ForageHypoxia"
+pwd <- getwd() #VL
 
 ## Libraries ----
 library("readr")
@@ -40,49 +41,102 @@ tu_id <- gsub(x = Sys.time(), pattern = "-|:|[.]| ", replacement = "")
 
 ## Data ----
 stations_cells <- readr::read_csv(paste0(pwd, "/data_benthos/stations_cells.csv"))
-benthos_biomass <- readr::read_csv(paste0(pwd, "/data_benthos/benthos_biomass.csv"))
+benthos_biomass <- readr::read_csv(paste0(pwd, "/data_benthos/benthos_biomass.csv")) %>%
+    dplyr::filter(SITE_TYPE == "RANDOM") %>%
+    dplyr::mutate(LBL = tolower(LBL)) %>%
+    rename(LAT = LATITUDE,
+           LON = LONGITUDE) %>%
+    mutate(Atlantic = (LAT < 37.22 & LON > -75.96) |
+               (LAT < 37.5 & LON > -75.8) |
+               (LAT < 38.0 & LON > -75.6) |
+               (LAT < 36.96 & LON > -75.99)
+    ) %>%
+    filter(!Atlantic) %>%
+    filter(Year >= 1985 & Year <= 2015) # RCA model date range
 benthos_strata <- readr::read_csv(paste0(pwd, "/data_benthos/benthos_strata.csv"))
-benthos_taxa <- readr::read_csv(paste0(pwd, "/data_benthos/Taxa_group_IDs_updated_rjw_v3_1.csv")) #benthos_taxa.csv"))
+benthos_taxa <- readr::read_csv(paste0(pwd, "/data_benthos/Taxa_group_IDs_updated_rjw_v3_1.csv")) %>%
+    mutate(LBL = tolower(LBL))
+#benthos_taxa.csv"))
 
 ## Combine rca files from Slava (one per year) ----
-years <- 1986:2015
-setwd(paste0(pwd, "/data_rca/rca_ts_1986-2015_2"))
-for (y in years) {
-    print(y)
+if (FALSE) {
+    years <- 1986:2015
+    setwd(paste0(pwd, "/data_rca/rca_ts_1986-2015_2"))
+    setwd(paste0(pwd, "/data_rca")) #VL
+    for (y in years) {
+        print(y)
 
-    rca_ts_addition <- readr::read_csv(paste0("rca_ts_", y, "_2.csv"))
-    if (y == min(years)) {
-        rca_ts <- rca_ts_addition
-    } else {
-        rca_ts %<>% dplyr::bind_rows(rca_ts_addition)
+        rca_ts_addition <- readr::read_csv(paste0("rca_ts_", y, "_2.csv"))
+        if (y == min(years)) {
+            rca_ts <- rca_ts_addition
+        } else {
+            rca_ts %<>% dplyr::bind_rows(rca_ts_addition)
+        }
     }
+    setwd(pwd)
+    ## Save combined rca data ----
+    ## Commented out because only need to save once
+    # setwd(paste0(pwd, "/data_rca"))
+    # write.table(
+    #     x = rca_ts,
+    #     file = "rca_ts_1986-2015_2.csv",
+    #     sep = ",",
+    #     col.names = TRUE,
+    #     row.names = FALSE
+    # )
+    # setwd(pwd)
+    readr::write_csv(rca_ts,
+                     file = "data_rca/rca_ts_1986-2015_2.csv")
 }
-setwd(pwd)
-
-## Save combined rca data ----
-## Commented out because only need to save once
-# setwd(paste0(pwd, "/data_rca"))
-# write.table(
-#     x = rca_ts,
-#     file = "rca_ts_1986-2015_2.csv",
-#     sep = ",",
-#     col.names = TRUE,
-#     row.names = FALSE
-# )
-# setwd(pwd)
+rca_ts <- readr::read_csv("data_rca/rca_ts_1986-2015_2.csv")
 
 
 ## Model data prep ----
+
 benthos_biomass_grp <- dplyr::left_join(benthos_biomass, benthos_taxa, by = "LBL") %>%
     dplyr::group_by(STATION, SAMPLE_DATE, Aggregate_grp) %>%
     dplyr::summarize(VALUE = sum(VALUE, na.rm = TRUE)) %>%
     ungroup()
 
-benthos_biomass_grp %<>% dplyr::left_join(dplyr::select(stations_cells, STATION, CellID), by = "STATION")
+
+### Adding 0s ----
+
+# Make sure we have 0s reported for each species (group) if not observed
+grps <- sort(unique(benthos_biomass_grp$Aggregate_grp))
+# Get combinations of Stations and Date that were sampled and at the same time
+# compute total biomass per station
+benthos_biomass_tot <- benthos_biomass_grp %>%
+    dplyr::group_by(STATION, SAMPLE_DATE) %>%
+    dplyr::summarize(VALUE = sum(VALUE, na.rm = TRUE)) %>%
+    ungroup()
+
+benthos_biomass_grp0 <- benthos_biomass_grp
+# Check that no NAs currently
+all(!is.na(benthos_biomass_grp0$VALUE))
+# Merge so each STATION and SAMPLE_DATE combination has numbers on all grps
+for (i in 1:nrow(benthos_biomass_tot)) {
+    tmp <- tibble(STATION = benthos_biomass_tot$STATION[i],
+                  SAMPLE_DATE = benthos_biomass_tot$SAMPLE_DATE[i],
+                  Aggregate_grp = grps)
+    benthos_biomass_grp0 %<>% dplyr::full_join(tmp, by = join_by(STATION, SAMPLE_DATE, Aggregate_grp))
+}
+benthos_biomass_grp0$VALUE[is.na(benthos_biomass_grp0$VALUE)] <- 0
+# Checks
+sum(benthos_biomass_grp0$VALUE) == sum(benthos_biomass_grp0$VALUE)
+nrow(benthos_biomass_grp0) == nrow(benthos_biomass_tot) * length(grps)
+# If using the data with 0s, replace it:
+benthos_biomass_grp <- benthos_biomass_grp0
+# rm(benthos_biomass_grp0)
+# Finish adding 0s
+
+# VL: probably should use inner_join() here because some stations are not in the stations_cells data
+# since they are outside the RCA model domain (see the code stations_cells.R)
+benthos_biomass_grp %<>% dplyr::inner_join(dplyr::select(stations_cells, STATION, CellID, Depth), by = "STATION")
 
 ## Remove NAs and . grouping names (check with Woodland about what the periods mean)
 benthos_biomass_grp %<>% dplyr::filter(!is.na(Aggregate_grp), Aggregate_grp != ".")
 
+# VL: Atlantic removed from benthos data above, so should be taken care of now.
 ## Remove trouble CellID but NOTE: Slava thought was in the Atlantic (see following lines for his cutoffs) but it does not seem to be
 # ## Remove Atlantic cells in the way Slava did
 # Atlantic =
@@ -93,34 +147,36 @@ benthos_biomass_grp %<>% dplyr::filter(!is.na(Aggregate_grp), Aggregate_grp != "
 
 benthos_biomass_grp %<>% dplyr::filter(!(CellID %in% c(1582)))
 
-## Cast data across station, cell ID, and date
-benthos_biomass_grp_cast <- benthos_biomass_grp %>%
-    reshape2::dcast(STATION + CellID + SAMPLE_DATE ~ Aggregate_grp, value.var = "VALUE") %>%
-    as_tibble()
-
-## Limit benthos biomass data to rca environmental dates (stops in 2015)
-benthos_biomass_grp_cast %<>% dplyr::filter(SAMPLE_DATE <= "2015-12-31")
-
-
-
-
-## rca_ts is enormous, so help by removing rows with CellID not in the benthos data
-rca_ts_inputs <- rca_ts %>% dplyr::filter(CellID %in% unique(benthos_biomass_grp_cast$CellID))
-
-## Save combined rca data subsetted to those with CellID in the benthos data (smaller file size) ----
-## Commented out because only need to save once
-# setwd(paste0(pwd, "/data_rca"))
-# write.table(
-#     x = rca_ts_inputs,
-#     file = "rca_ts_1986-2015_2_biomassCellID.csv",
-#     sep = ",",
-#     col.names = TRUE,
-#     row.names = FALSE
-# )
-# setwd(pwd)
-
-## Change Date column name to SAMPLE_DATE so can be combined with the benthos data
-colnames(rca_ts_inputs)[which(colnames(rca_ts_inputs) == "Date")] = "SAMPLE_DATE"
+# VL: Comment out the next lag selection and casting temporarily to add the RCA data and try models asap
+#
+# ## Cast data across station, cell ID, and date
+# benthos_biomass_grp_cast <- benthos_biomass_grp %>%
+#     reshape2::dcast(STATION + CellID + SAMPLE_DATE ~ Aggregate_grp, value.var = "VALUE") %>%
+#     as_tibble()
+#
+# ## Limit benthos biomass data to rca environmental dates (stops in 2015)
+# benthos_biomass_grp_cast %<>% dplyr::filter(SAMPLE_DATE <= "2015-12-31")
+#
+#
+#
+#
+# ## rca_ts is enormous, so help by removing rows with CellID not in the benthos data
+# rca_ts_inputs <- rca_ts %>% dplyr::filter(CellID %in% unique(benthos_biomass_grp_cast$CellID))
+#
+# ## Save combined rca data subsetted to those with CellID in the benthos data (smaller file size) ----
+# ## Commented out because only need to save once
+# # setwd(paste0(pwd, "/data_rca"))
+# # write.table(
+# #     x = rca_ts_inputs,
+# #     file = "rca_ts_1986-2015_2_biomassCellID.csv",
+# #     sep = ",",
+# #     col.names = TRUE,
+# #     row.names = FALSE
+# # )
+# # setwd(pwd)
+#
+# ## Change Date column name to SAMPLE_DATE so can be combined with the benthos data
+# colnames(rca_ts_inputs)[which(colnames(rca_ts_inputs) == "Date")] = "SAMPLE_DATE"
 
 
 ## Add hynet embeddings
@@ -140,6 +196,121 @@ hynet_manual <- readr::read_csv(
         "embedding_Manual.csv"
     )
 )
+
+# VL: Since I continue working with non-TS data, the code below is added
+D_all <- benthos_biomass_grp %>%
+    dplyr::mutate(Year = as.numeric(format(SAMPLE_DATE, "%Y")),
+                  Month = as.numeric(format(SAMPLE_DATE, "%m")),
+                  CellID = paste0("x", CellID)) %>%
+    dplyr::left_join(hynet, by = join_by(CellID, Year)) %>%
+    dplyr::left_join(hynet_manual %>% dplyr::select(-Cell), by = join_by(CellID, Year, SAMPLE_DATE)) %>%
+    dplyr::rename(Date = SAMPLE_DATE) %>%
+    dplyr::left_join(rca_ts %>% mutate(CellID = paste0("x", CellID)), by = join_by(CellID, Date))
+summary(D_all) # should not have NAs
+
+# Start selecting the data for modeling
+# vector names for the variables
+RESPONSE <- "VALUE"
+(PREDICTORS <- names(D_all) %>% base::setdiff(c(RESPONSE, "STATION", "Date", "CellID", "Aggregate_grp")))
+GRP <- "polychaete" # grps[14]
+
+D <- D_all %>%
+    filter(Aggregate_grp == GRP)
+
+## Training/testing split
+# index of training and testing observations
+set.seed(1)
+itrain <- sample(nrow(D), size = round(train_percent * nrow(D)))
+itest <- c(1:nrow(D))[-itrain]
+
+x_train <- D[itrain, PREDICTORS] %>%
+    as.matrix()
+x_test <- D[itest, PREDICTORS] %>%
+    as.matrix()
+
+
+y_train <- (1 + 1000 * D[itrain, RESPONSE]) %>%
+    log10() %>%
+    as.matrix(ncol = 1)
+y_test <- (1 + 1000 * D[itest, RESPONSE]) %>%
+    log10() %>%
+    as.matrix(ncol = 1)
+hist(y_train)
+
+# https://ibkrcampus.com/ibkr-quant-news/r-code-back-transform-from-carets-preprocess/
+Scaler <- caret::preProcess(y_train, rangeBounds = c(-1, 1), method = "range")
+y_train_s <- predict(Scaler, y_train)
+y_test_s <- predict(Scaler, y_test)
+
+
+
+# Random forest
+m_rf <- ranger::ranger(dependent.variable.name = RESPONSE,
+                       data = cbind(y_train, x_train),
+                       num.trees = 500)
+y_rf <- predict(m_rf, data = x_test)$predictions
+plot(x = y_test, y = y_rf)
+abline(coef = c(0, 1))
+caret::postResample(obs = y_test, pred = y_rf)
+# RMSE       Rsquared       MAE
+# 0.5024125 0.2865504 0.3996728
+
+
+# Neural network
+# https://tensorflow.rstudio.com/tutorials/keras/regression#regression-with-a-deep-neural-network-dnn
+
+normalizer <- layer_normalization(axis = -1L)
+normalizer %>% adapt(x_train)
+# print(normalizer$mean)
+
+
+build_and_compile_model <- function(norm) {
+    model <- keras_model_sequential() %>%
+        norm() %>%
+        layer_dense(32, activation = 'relu') %>%
+        layer_dropout(rate = 0.5) %>%
+        layer_dense(64, activation = 'relu') %>%
+        layer_dropout(rate = 0.25) %>%
+        layer_dense(1, activation = 'linear')
+
+    model %>% compile(
+        loss = 'mean_absolute_error',
+        optimizer = optimizer_adam(0.001)
+    )
+
+    model
+}
+
+dnn_model <- build_and_compile_model(normalizer)
+summary(dnn_model)
+
+history <- dnn_model %>% fit(
+    x_train,
+    y_train,
+    validation_split = 0.2,
+    # verbose = 0,
+    epochs = 100
+)
+# plot(history)
+y_dnn <- predict(dnn_model, x_test)
+plot(x = y_test, y = y_dnn)
+abline(coef = c(0, 1))
+caret::postResample(obs = y_test, pred = y_dnn)
+#      RMSE  Rsquared       MAE
+#  0.5477814 0.1577737 0.446365
+
+#VL: stopped here.
+
+
+
+
+
+
+
+
+
+
+
 
 ## Add year to rca_ts_inputs so can join on it
 rca_ts_inputs %<>% dplyr::mutate(Year = substr(rca_ts_inputs$SAMPLE_DATE, 1, 4))
