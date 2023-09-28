@@ -100,9 +100,9 @@ N <- tibble(Year = YEARS,
 
 ## Bay stats ----
 # Baywide data from Allison Dreiss, email 2023-08-09
-HV <- read_csv("data_rca/Hypoxic_volume_all_data.csv") %>%
+HV <- read_csv("data_rca/Hypoxic_volume_all_data_corr.csv") %>%
     rename(HVolume_km3 = `Volume_ km^3`)
-HA <- read_csv("data_rca/Hypoxic_area_all_data.csv") %>%
+HA <- read_csv("data_rca/Hypoxic_area_all_data_corr.csv") %>%
     rename(HArea_km2 = `Area in km^2`)
 
 ### whole year
@@ -150,6 +150,7 @@ Dlong <- D %>%
 # jpeg("images/hynet1_ts.jpeg", width = 11, height = 7, units = "in", res = 300)
 png("images/hynet1_ts.png", width = 11, height = 7, units = "in", res = 300)
 Dlong %>%
+    filter(!grepl("_max", Variable)) %>%
     ggplot(aes(x = Year, y = Value)) +
     geom_line() +
     facet_wrap(vars(Variable), ncol = 4, scales = "free_y")
@@ -159,6 +160,7 @@ dev.off()
 png("images/hynet1_mat.png", width = 15, height = 15, units = "in", res = 300)
 D %>%
     select(-Year) %>%
+    select(-ends_with("_max")) %>%
     GGally::ggpairs()
 dev.off()
 
