@@ -257,10 +257,10 @@ colnames(E_LSE) <- c("CellID", "Year",
                      paste0("LSE_Y", 1:ndims)
 )
 write.csv(E_ASE,
-          file = "dataderived/embedding_ASE.csv",
+          file = "data_hynet/embedding_ASE.csv",
           row.names = FALSE)
 write.csv(E_LSE,
-          file = "dataderived/embedding_LSE.csv",
+          file = "data_hynet/embedding_LSE.csv",
           row.names = FALSE)
 
 # After running
@@ -400,7 +400,7 @@ for (year in YEARS) { # year = 1995
     EMB <- bind_rows(EMB, bb)
 }
 write.csv(EMB,
-          file = "dataderived/embedding_Manual.csv",
+          file = "data_hynet/embedding_Manual.csv",
           row.names = FALSE)
 summary(EMB)
 
