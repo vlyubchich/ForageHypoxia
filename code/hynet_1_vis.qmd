@@ -63,7 +63,11 @@ rca_cells <- data.table::fread("../data_rca/rca_cells_2.csv") %>%
                (LAT < 37.5 & LON > -75.8) |
                (LAT < 38.0 & LON > -75.6) |
                (LAT < 36.96 & LON > -75.99)
-    ) %>% 
+    ) 
+AtlanticCells <- rca_cells %>%
+    filter(Atlantic) %>%
+    pull(CellID)
+rca_cells <- rca_cells %>% 
     filter(!Atlantic)
 #Use info from the shape file to find projections for the stations
 ###http://www.prj2epsg.org/search
@@ -221,6 +225,30 @@ D <- rca_cells[ss, ] %>%
            cent_2011G = eigen_centrality(g2011G, directed = TRUE)$vector
            )
 ```
+
+Calculate correlations between node stats and O2.
+```{r}
+# Load O2 data
+o2_2002 <- data.table::fread(paste0("../data_rca/rca_ts_2002_2.csv"),
+                       select = c("DOAVEG_avg", "CellID", "Date")) %>%
+    mutate(CellID = paste0("x", CellID)) %>%
+    filter(!is.element(CellID, AtlanticCells))
+o2_2002_avg <- o2_2002 %>% 
+    group_by(CellID) %>% 
+    summarise(O2_2002g = mean(DOAVEG_avg))
+Dtmp <- merge(D, o2_2002_avg, by = "CellID")
+
+# Load deseasonalized O2 data
+o2_2002_ds <- readRDS("../dataderived/Dwide_mat_deseas_2002.rds")
+o2_2002_ds_avg <- apply(o2_2002_ds, 2, mean)
+o2_2002_ds_avg <- tibble(CellID = names(o2_2002_ds_avg), O2_2002g_ds = o2_2002_ds_avg)
+Dtmp <- merge(Dtmp, o2_2002_ds_avg, by = "CellID")
+Dtmp %>% 
+    select(contains("2002G")) %>% 
+    GGally::ggpairs()
+```
+
+
 
 
 ## Compare 2002 and 2011
