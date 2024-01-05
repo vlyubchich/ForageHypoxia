@@ -42,6 +42,7 @@ Load required packages and functions.
 library(dplyr)
 library(ggplot2)
 library(patchwork)
+theme_set(theme_light())
 
 library(maptools)
 
@@ -562,3 +563,73 @@ p1 + p2 +
     theme_light() & 
     coord_fixed(ratio = rto)
 ```
+
+
+## Visualize all networks
+
+
+```{r}
+#| cache: true
+#| fig-width: 12
+#| fig-height: 4
+
+YEARS = 1986L:2015L
+alpha = 0.05
+# ndims = 5
+
+# edims <- numeric()
+# E_ASE <- E_LSE <- numeric()
+# Full loop on weighted net is about 5 minutes.
+for (year in YEARS) { # year = 2002
+
+    # Load data obtained on cluster
+    Mcoef <- readRDS(paste0("../dataderived/CAUSpairs_", year, ".rds"))
+    proc <- create_adj_pairs(Mcoef)
+
+    # Thresholding / adjusting
+    # proc$Acoef[proc$Acoef < 0.01] <- 0
+    proc$Gp <- apply(proc$Gp, 2, p.adjust, method = "BY")
+    diag(proc$Gp) <- 1
+
+    # Unweighted directed adjacency matrix
+    AM <- proc$Gp < alpha
+
+    # Weighted directed adjacency matrix
+    AMw <- proc$Acoef
+    AMw[AM == 0] <- 0
+
+    # Create graph, add attributes
+    graphGranger <- igraph::graph_from_adjacency_matrix(AMw, weighted = TRUE
+                                                        #AM, weighted = NULL
+                                                        ,mode = "directed"
+                                                        ,diag = FALSE)
+    # igraph::is_weighted(graphGranger)
+    deg_in = degree(graphGranger, mode = "in") %>% as_tibble()
+    deg_out = degree(graphGranger, mode = "out") %>% as_tibble()
+    
+    p1 <- ggplot(deg_in, aes(x = value)) + 
+        geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+        ylab("Density") + xlab("In-degree") + 
+        ggtitle(year)
+    p2 <- ggplot(deg_out, aes(x = value)) + 
+        geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "grey50") +
+        ylab("Density") + xlab("Out-degree")
+    
+    p3 <- ggplot(D, aes(x = lon, y = lat, color = deg_in$value)) + 
+        geom_polygon(data = shoreline, 
+                     aes(x = long, y = lat, group = group), 
+                     color = "black", fill = NA) + 
+        geom_point(size = sz)
+    p4 <- ggplot(D, aes(x = lon, y = lat, color = deg_out$value)) + 
+        geom_polygon(data = shoreline, 
+                     aes(x = long, y = lat, group = group), 
+                     color = "black", fill = NA) + 
+        geom_point(size = sz)
+    print(
+    p1 + p2 + p3 + p4 + 
+        plot_layout(nrow = 1) + 
+        plot_annotation(tag_levels = 'A') & theme_light())
+}
+```
+
+
