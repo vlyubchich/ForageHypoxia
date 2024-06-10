@@ -150,6 +150,7 @@ Dlong <- D %>%
 # jpeg("images/hynet1_ts.jpeg", width = 11, height = 7, units = "in", res = 300)
 png("images/hynet1_ts.png", width = 11, height = 7, units = "in", res = 300)
 Dlong %>%
+    filter(!grepl("HA_year_med", Variable)) %>%
     filter(!grepl("_max", Variable)) %>%
     ggplot(aes(x = Year, y = Value)) +
     geom_line() +
@@ -161,6 +162,46 @@ png("images/hynet1_mat.png", width = 15, height = 15, units = "in", res = 300)
 D %>%
     select(-Year) %>%
     select(-ends_with("_max")) %>%
+    select(-G_size) %>%
+    select(contains(c("G_", "HA_year_avg", "HV_year_avg"))) %>%
     GGally::ggpairs()
 dev.off()
 
+library(ggcorrplot)
+corr <- D %>%
+    select(-Year) %>%
+    select(-ends_with("_max")) %>%
+    select(-G_size) %>%
+    select(contains(c("G_", "HA_year_avg", "HV_year_avg"))) %>%
+    as.matrix() %>%
+    cor() %>%
+    round(digits = 2)
+p.mat <- D %>%
+    select(-Year) %>%
+    select(-ends_with("_max")) %>%
+    select(-G_size) %>%
+    select(contains(c("G_", "HA_year_avg", "HV_year_avg"))) %>%
+    as.matrix() %>%
+    cor_pmat()
+p1 <- ggcorrplot::ggcorrplot(
+    corr,
+    p.mat = p.mat,
+    hc.order = FALSE,
+    lab = TRUE,
+    type = "lower",
+    insig = "pch",
+    colors = c("#6D9EC1", "white", "#E46726")
+) +
+    ggtitle("") + theme(plot.margin = unit(c(0,0,0,0),"mm"))
+
+png("images/hynet1_cormat.png", width = 7, height = 5, units = "in", res = 300)
+p1
+dev.off()
+
+apply(D, 2, mean)
+# Year         indegree        outdegree           G_size        G_density    G_reciprocity G_centralization        G_pathLen     G_components
+# 2.000500e+03     3.235483e+02     3.235483e+02     9.913521e+05     1.056312e-01     1.489208e-01     4.340684e-03     5.728271e-02     3.806667e+01
+# G_isolated      HV_year_avg      HV_year_max      HV_year_med         HV_s_avg         HV_s_max         HV_s_med      HA_year_avg      HA_year_max
+# 3.380000e+01     1.328267e+01     5.176651e+01     3.636431e+00     2.862888e+01     5.087745e+01     2.999562e+01     5.346682e+02     2.657092e+03
+# HA_year_med         HA_s_avg         HA_s_max         HA_s_med
+# 7.000000e-32     1.282893e+03     2.657092e+03     1.428856e+03
