@@ -570,7 +570,7 @@ p1 + p2 +
 
 ```{r}
 #| cache: true
-#| fig-width: 12
+#| fig-width: 14
 #| fig-height: 4
 
 YEARS = 1986L:2015L
@@ -603,6 +603,16 @@ for (year in YEARS) { # year = 2002
                                                         #AM, weighted = NULL
                                                         ,mode = "directed"
                                                         ,diag = FALSE)
+    # ?cluster_walktrap
+    # ?cluster_infomap 
+    clusters <- cluster_infomap(graphGranger)
+    # print(clusters)
+    # table(clusters$membership)
+    Cluster <- as.factor(clusters$membership)
+    # plot(graphGranger, vertex.color = membership(clusters))
+    
+    
+    
     # igraph::is_weighted(graphGranger)
     deg_in = degree(graphGranger, mode = "in") %>% as_tibble()
     deg_out = degree(graphGranger, mode = "out") %>% as_tibble()
@@ -625,8 +635,17 @@ for (year in YEARS) { # year = 2002
                      aes(x = long, y = lat, group = group), 
                      color = "black", fill = NA) + 
         geom_point(size = sz)
+    
+    
+    p_cl <- ggplot(D, aes(x = lon, y = lat, color = Cluster)) + 
+        geom_polygon(data = shoreline, 
+                     aes(x = long, y = lat, group = group), 
+                     color = "black", fill = NA) + 
+        geom_point(size = sz) + 
+        scale_color_viridis_d()
+    
     print(
-    p1 + p2 + p3 + p4 + 
+    p1 + p2 + p3 + p4 + p_cl + 
         plot_layout(nrow = 1) + 
         plot_annotation(tag_levels = 'A') & theme_light())
 }
